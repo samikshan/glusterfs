@@ -1,0 +1,13 @@
+# -*- coding: utf-8 -*-
+SERVER_ADDRESS = "@localstatedir@/run/gluster/events.sock"
+DEFAULT_CONFIG_FILE = "@SYSCONF_DIR@/glusterfs/eventsconfig.json"
+CUSTOM_CONFIG_FILE_TO_SYNC = "/events/config.json"
+CUSTOM_CONFIG_FILE = "@GLUSTERD_WORKDIR@" + CUSTOM_CONFIG_FILE_TO_SYNC
+WEBHOOKS_FILE_TO_SYNC = "/events/webhooks.json"
+WEBHOOKS_FILE = "@GLUSTERD_WORKDIR@" + WEBHOOKS_FILE_TO_SYNC
+LOG_FILE = "@localstatedir@/log/glusterfs/events.log"
+EVENTS_LOG_FILE = "@localstatedir@/log/glusterfs/events1.log"
+EVENTSD = "glustereventsd"
+CONFIG_KEYS = ["log_level"]
+BOOL_CONFIGS = []
+RESTART_CONFIGS = []
