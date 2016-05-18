@@ -4673,6 +4673,14 @@
  */
 #define GD_MSG_DICT_GET_SUCCESS                   (GLUSTERD_COMP_BASE + 578)
 
+/*!
+ * @messageid
+ * @diagnosis
+ * @recommendation
+ *
+ */
+#define GD_MSG_DAEMON_STATE_REQ_RCVD               (GLUSTERD_COMP_BASE + 579)
+
 /*------------*/
 #define glfs_msg_end_x GLFS_MSGID_END, "Invalid: End of messages"
 #endif /* !_GLUSTERD_MESSAGES_H_ */

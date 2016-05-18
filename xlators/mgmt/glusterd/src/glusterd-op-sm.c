@@ -1747,6 +1747,12 @@ glusterd_op_stage_status_volume (dict_t *dict, char **op_errstr)
         return ret;
 }
 
+static int
+glusterd_op_stage_get_state (dict_t *dict, char **op_errstr)
+{
+        int ret = -1;
+        return ret;
+}
 
 static gf_boolean_t
 glusterd_is_profile_on (glusterd_volinfo_t *volinfo)
@@ -5697,6 +5703,10 @@ glusterd_op_stage_validate (glusterd_op_t op, dict_t *dict, char **op_errstr,
                 case GD_OP_SCRUB_STATUS:
                         ret = glusterd_op_stage_bitrot (dict, op_errstr,
                                                         rsp_dict);
+                        break;
+
+                case GD_OP_GET_STATE:
+                        ret = glusterd_op_stage_get_state (dict, op_errstr);
                         break;
 
                 default:

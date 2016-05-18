@@ -192,6 +192,7 @@ enum gluster_cli_procnum {
         GLUSTER_CLI_ATTACH_TIER,
         GLUSTER_CLI_DETACH_TIER,
         GLUSTER_CLI_TIER,
+        GLUSTER_CLI_DAEMON_GET_STATE,
         GLUSTER_CLI_MAXVALUE,
 };
 

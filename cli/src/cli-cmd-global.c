@@ -34,7 +34,9 @@ cli_cmd_global_help_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
                          const char **words, int wordcount);
 int cli_cmd_ganesha_cbk (struct cli_state *state, struct cli_cmd_word *word,
                                          const char **words, int wordcount);
-
+int
+cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
+                              const char **words, int wordcount);
 
 struct cli_cmd global_cmds[] = {
         { "global help",
@@ -44,6 +46,10 @@ struct cli_cmd global_cmds[] = {
         { "nfs-ganesha {enable| disable} ",
            cli_cmd_ganesha_cbk,
           "Enable/disable NFS-Ganesha support",
+        },
+        { "daemon get-state <DAEMON> odir </path/to/output/dir/>",
+          cli_cmd_daemon_get_state_cbk,
+          "Get state of daemon",
         },
         {NULL,  NULL,  NULL}
 };
@@ -133,3 +139,45 @@ out:
         return ret;
 }
 
+int
+cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
+                              const char **words, int wordcount)
+{
+        int                     sent        =   0;
+        int                     parse_error =   0;
+        int                     ret         =  -1;
+        rpc_clnt_procedure_t    *proc       =  NULL;
+        call_frame_t            *frame      =  NULL;
+        dict_t                  *options    =  NULL;
+        cli_local_t             *local      =  NULL;
+        char                    *op_errstr  =  NULL;
+
+        proc = &cli_rpc_prog->proctable[GLUSTER_CLI_DAEMON_GET_STATE];
+
+        frame = create_frame (THIS, THIS->ctx->pool);
+        if (!frame)
+                goto out;
+
+        ret = cli_cmd_daemon_get_state_parse (state, words, wordcount,
+                                              &options, &op_errstr);
+
+        if (ret) {
+                goto out;
+        }
+
+        CLI_LOCAL_INIT (local, words, frame, options);
+
+        if (proc->fn)
+                ret = proc->fn (frame, THIS, options);
+out:
+        if (ret) {
+                cli_cmd_sent_status_get (&sent);
+                if ((sent == 0) && (parse_error == 0))
+                        cli_out ("Didn't get daemon state");
+        }
+
+        CLI_STACK_DESTROY (frame);
+
+        return ret;
+
+}

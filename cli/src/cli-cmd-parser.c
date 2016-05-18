@@ -926,6 +926,41 @@ out:
 }
 
 int32_t
+cli_cmd_daemon_get_state_parse (struct cli_state *state, const char **words, int wordcount,
+                                dict_t **options, char **op_errstr)
+{
+        dict_t    *dict            = NULL;
+        int        ret             = -1;
+        uint32_t   cmd             = 0;
+
+        GF_ASSERT (options);
+
+        dict = dict_new ();
+        if (!dict)
+                goto out;
+
+        if (wordcount == 5) {
+                if (strcmp (words[2], "glusterd") == 0) {
+                        cli_out ("Dumping state for glusterd");
+                        dict_set_str (dict, "odir", words[4]);
+                        dict_set_str (dict, "daemon", words[2]);
+                        ret = 0;
+                }
+        }
+
+        if (ret)
+                goto out;
+
+        *options = dict;
+
+ out:
+        if (ret && dict)
+                dict_destroy (dict);
+
+        return ret;
+}
+
+int32_t
 cli_cmd_inode_quota_parse (const char **words, int wordcount, dict_t **options)
 {
         dict_t          *dict    = NULL;

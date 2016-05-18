@@ -503,6 +503,59 @@ out:
         return ret;
 }
 
+int
+gf_cli_daemon_get_state_cbk (struct rpc_req *req, struct iovec *iov,
+                             int count, void *myframe)
+{
+        gf_cli_rsp           rsp   = {0,};
+        int                  ret   = -1;
+        dict_t               *dict = NULL;
+        char                 *help_str = NULL;
+        GF_ASSERT (myframe);
+
+        if (-1 == req->rpc_status) {
+                goto out;
+        }
+        ret = xdr_to_generic (*iov, &rsp, (xdrproc_t)xdr_gf_cli_rsp);
+        if (ret < 0) {
+                gf_log (((call_frame_t *) myframe)->this->name, GF_LOG_ERROR,
+                        "Failed to decode xdr response");
+                goto out;
+        }
+
+        gf_log ("cli", GF_LOG_INFO, "Received resp to glusterd");
+
+        dict = dict_new ();
+
+        if (!dict) {
+                ret = -1;
+                goto out;
+        }
+
+        ret = dict_unserialize (rsp.dict.dict_val, rsp.dict.dict_len, &dict);
+        if (ret)
+                goto out;
+
+        if (rsp.op_ret) {
+                if (strcmp (rsp.op_errstr, ""))
+                        cli_err ("Failed to get daemon state: %s", rsp.op_errstr);
+                else
+                        cli_err ("Failed to get daemon state");
+        }
+
+        else {
+                cli_out("Got daemon state");
+        }
+
+        ret = rsp.op_ret;
+
+out:
+        if (dict)
+                dict_unref (dict);
+        cli_cmd_broadcast_response (ret);
+        return ret;
+}
+
 void
 cli_out_options ( char *substr, char *optstr, char *valstr)
 {
@@ -4112,6 +4165,30 @@ out:
                 frame->local = NULL;
         }
         gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);
+        return ret;
+}
+
+int32_t
+gf_cli_daemon_get_state (call_frame_t *frame, xlator_t *this, void *data)
+{
+        gf_cli_req              req =  { {0,} } ;
+        int                     ret = 0;
+        dict_t                  *dict = NULL;
+
+        if (!frame || !this ||  !data) {
+                ret = -1;
+                goto out;
+        }
+
+        dict = data;
+
+        ret = cli_to_glusterd (&req, frame, gf_cli_daemon_get_state_cbk,
+                               (xdrproc_t) xdr_gf_cli_req, dict,
+                               GLUSTER_CLI_DAEMON_GET_STATE, this, cli_rpc_prog,
+                               NULL);
+out:
+        gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);
+
         return ret;
 }
 
@@ -10884,7 +10961,6 @@ cli_to_glusterd (gf_cli_req *req, call_frame_t *frame,
 
         ret = cli_cmd_submit (NULL, req, frame, prog, procnum, iobref, this,
                               cbkfn, (xdrproc_t) xdrproc);
-
 out:
         return ret;
 
@@ -11244,7 +11320,8 @@ struct rpc_clnt_procedure gluster_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_BITROT]           = {"BITROT", gf_cli_bitrot},
         [GLUSTER_CLI_ATTACH_TIER]      = {"ATTACH_TIER", gf_cli_attach_tier},
         [GLUSTER_CLI_DETACH_TIER]      = {"DETACH_TIER", gf_cli_detach_tier},
-        [GLUSTER_CLI_TIER]             = {"TIER", gf_cli_tier}
+        [GLUSTER_CLI_TIER]             = {"TIER", gf_cli_tier},
+        [GLUSTER_CLI_DAEMON_GET_STATE] = {"DAEMON_GET_STATE", gf_cli_daemon_get_state}
 };
 
 struct rpc_clnt_program cli_prog = {
