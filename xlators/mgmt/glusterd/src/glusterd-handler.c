@@ -4924,21 +4924,104 @@ glusterd_handle_get_vol_opt (rpcsvc_request_t *req)
 }
 
 static int
+glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
+{
+        int32_t                         ret = -1;
+        gf_cli_rsp                      rsp = {0,};
+        FILE                            *fp = NULL;
+        char                            filepath[4096] = {0,};
+        char                            err_str[2048] = {0,};
+        glusterd_conf_t                 *priv = NULL;
+        glusterd_peerinfo_t             *peerinfo = NULL;
+        glusterd_volinfo_t              *volinfo = NULL;
+        glusterd_brickinfo_t            *brickinfo = NULL;
+        xlator_t                        *this = NULL;
+        char                            *odir = NULL;
+        int                             count = 0;
+        int                             count_bkp = 0;
+
+        this = THIS;
+        GF_ASSERT (this);
+
+        priv = THIS->private;
+        GF_ASSERT (priv);
+
+        ret = dict_get_str (dict, "odir", &odir);
+        if (ret) {
+                snprintf (err_str, sizeof (err_str), "Unable to get path to output directory");
+                gf_msg (this->name, GF_LOG_ERROR, 0,
+                        GD_MSG_DICT_GET_FAILED, "%s", err_str);
+                goto out;
+        }
+
+        sprintf (filepath, "%s%s", odir, "glusterd-state");
+        fp = fopen (filepath, "w");
+
+        fprintf (fp, "[Peers]\n");
+
+        cds_list_for_each_entry (peerinfo, &priv->peers, uuid_list) {
+                fprintf (fp, "Peer%d.hostname: %s\n", ++count, peerinfo->hostname);
+                fprintf (fp, "Peer%d.uuid: %s\n", count, peerinfo->uuid_str);
+                fprintf (fp, "Peer%d.state: %d\n", count, peerinfo->state.state);
+        }
+
+        count = 0;
+        fprintf (fp, "\n[Volumes]\n");
+
+        cds_list_for_each_entry (volinfo, &priv->volumes, vol_list) {
+                fprintf (fp, "Volume%d.name: %s\n", ++count, volinfo->volname);
+                fprintf (fp, "Volume%d.id: %s\n", count, gf_strdup (uuid_utoa (volinfo->volume_id)));
+                fprintf (fp, "Volume%d.type: %d\n", count, volinfo->type);
+                fprintf (fp, "Volume%d.status: %d\n", count, volinfo->status);
+                fprintf (fp, "Volume%d.brickcount: %d\n", count, volinfo->brick_count);
+
+                count_bkp = count;
+                count = 0;
+                cds_list_for_each_entry (brickinfo, &volinfo->bricks, brick_list) {
+                        fprintf (fp, "Volume%d.Brick%d.path: %s:%s\n", count_bkp, ++count, brickinfo->hostname, brickinfo->path);
+                        fprintf (fp, "Volume%d.Brick%d.port: %d\n", count_bkp, count, brickinfo->port);
+                        fprintf (fp, "Volume%d.Brick%d.status: %d\n", count_bkp, count, brickinfo->status);
+                        fprintf (fp, "Volume%d.Brick%d.hostname: %s\n", count_bkp, count, brickinfo->hostname);
+                        fprintf (fp, "Volume%d.Brick%d.uuid: %s\n", count_bkp, count, gf_strdup (uuid_utoa (brickinfo->uuid)));
+                        fprintf (fp, "Volume%d.Brick%d.filesystem_type: %s\n", count_bkp, count, brickinfo->fstype);
+                        fprintf (fp, "Volume%d.Brick%d.mount_options: %s\n", count_bkp, count, brickinfo->mnt_opts);
+                }
+                count = count_bkp;
+                fprintf (fp, "\n");
+        }
+
+        fprintf (fp, "[Ports]\n");
+        fprintf (fp, "Base port: %d\n", priv->pmap->base_port);
+        fprintf (fp, "Last allocated port: %d\n\n", priv->pmap->last_alloc);
+
+        fclose (fp);
+out:
+        rsp.op_ret = 0;
+        rsp.op_errstr = "";
+
+        ret = dict_allocate_and_serialize (dict, &rsp.dict.dict_val,
+                                           &rsp.dict.dict_len);
+        glusterd_to_cli (req, &rsp, NULL, 0, NULL,
+                         (xdrproc_t)xdr_gf_cli_rsp, dict);
+
+        gf_msg ("glusterd:", GF_LOG_INFO, 0, GD_MSG_CLI_REQ_RECVD, "Submitted reply to rpc");
+        return ret;
+}
+
+static int
 __glusterd_handle_daemon_get_state (rpcsvc_request_t *req)
 {
         int32_t                         ret = -1;
         gf_cli_req                      cli_req = {{0,}};
         dict_t                          *dict = NULL;
-        char                            *daemon_name = NULL;
         char                            *odir = NULL;
         char                            err_str[2048] = {0,};
         xlator_t                        *this = NULL;
 
         this = THIS;
-
         GF_ASSERT (this);
         GF_ASSERT (req);
- 
+
         ret = xdr_to_generic (req->msg[0], &cli_req, (xdrproc_t)xdr_gf_cli_req);
         if (ret < 0) {
                 snprintf (err_str, sizeof (err_str), "Failed to decode "
@@ -4969,15 +5052,6 @@ __glusterd_handle_daemon_get_state (rpcsvc_request_t *req)
                 }
         }
 
-        ret = dict_get_str (dict, "daemon", &daemon_name);
-        if (ret) {
-                snprintf (err_str, sizeof (err_str), "Unable to get the daemon "
-                          "name");
-                gf_msg (this->name, GF_LOG_ERROR, 0,
-                        GD_MSG_DICT_GET_FAILED, "%s", err_str);
-                goto out;
-        }
-
         ret = dict_get_str (dict, "odir", &odir);
         if (ret) {
                 snprintf (err_str, sizeof (err_str), "Unable to get path to output directory");
@@ -4987,16 +5061,13 @@ __glusterd_handle_daemon_get_state (rpcsvc_request_t *req)
         }
 
         gf_msg (this->name, GF_LOG_INFO, 0,
-                GD_MSG_DAEMON_STATE_REQ_RCVD , "Received request to get state for "
-                "daemon %s", daemon_name);
+                GD_MSG_DAEMON_STATE_REQ_RCVD , "Received request to get state for glusterd");
 
-        ret = glusterd_op_begin_synctask (req, GD_OP_GET_STATE, dict);
+        ret = glusterd_get_state (req, dict);
 
-        gf_msg ("glusterd:", GF_LOG_INFO, 0, GD_MSG_CLI_REQ_RECVD, "in glusterd_handler");
 out:
         if (dict)
                 dict_unref (dict);
-
         return ret;
 }
 

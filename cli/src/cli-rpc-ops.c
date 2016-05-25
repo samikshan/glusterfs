@@ -4175,12 +4175,17 @@ gf_cli_daemon_get_state (call_frame_t *frame, xlator_t *this, void *data)
         int                     ret = 0;
         dict_t                  *dict = NULL;
 
+        char                    *odir       =  NULL;
+
         if (!frame || !this ||  !data) {
                 ret = -1;
                 goto out;
         }
 
         dict = data;
+
+        ret = dict_get_str (dict, "odir", &odir);
+        cli_out ("Output dir: %s", odir);
 
         ret = cli_to_glusterd (&req, frame, gf_cli_daemon_get_state_cbk,
                                (xdrproc_t) xdr_gf_cli_req, dict,

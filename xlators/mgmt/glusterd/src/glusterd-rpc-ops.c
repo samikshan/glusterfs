@@ -162,12 +162,6 @@ glusterd_op_send_cli_response (glusterd_op_t op, int32_t op_ret,
                }
                break;
         }
-        case GD_OP_GET_STATE:
-        {
-                if (ctx)
-                        ret = dict_get_str (ctx, "errstr", &errstr);
-                break;
-        }
         }
 
         rsp.op_ret = op_ret;
