@@ -4935,6 +4935,7 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
         glusterd_peerinfo_t             *peerinfo = NULL;
         glusterd_volinfo_t              *volinfo = NULL;
         glusterd_brickinfo_t            *brickinfo = NULL;
+        glusterd_snap_t                 *snapinfo = NULL;
         xlator_t                        *this = NULL;
         char                            *odir = NULL;
         int                             count = 0;
@@ -4990,9 +4991,25 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
                 fprintf (fp, "\n");
         }
 
+        count = 0;
+        fprintf (fp, "\n[Snapshots]\n");
+
+        cds_list_for_each_entry (snapinfo, &priv->snapshots, snap_list) {
+                fprintf (fp, "Snap%d.name: %s\n", ++count, snapinfo->snapname);
+                fprintf (fp, "Snap%d.id: %s\n", count, gf_strdup (uuid_utoa (snapinfo->snap_id)));
+                fprintf (fp, "Snap%d.description: %s\n", count, snapinfo->description);
+                fprintf (fp, "Snap%d.timestamp: %s\n", count, gf_strdup (ctime (snapinfo->time_stamp)));
+                fprintf (fp, "Snap%d.status: %d\n", count, snapinfo->snap_status);
+
+                fprintf (fp, "\n");
+        }
+
+
         fprintf (fp, "[Ports]\n");
         fprintf (fp, "Base port: %d\n", priv->pmap->base_port);
         fprintf (fp, "Last allocated port: %d\n\n", priv->pmap->last_alloc);
+
+        fprintf (fp, "op-version: %d\n", priv->op_version);
 
         fclose (fp);
 out:
@@ -5004,7 +5021,6 @@ out:
         glusterd_to_cli (req, &rsp, NULL, 0, NULL,
                          (xdrproc_t)xdr_gf_cli_rsp, dict);
 
-        gf_msg ("glusterd:", GF_LOG_INFO, 0, GD_MSG_CLI_REQ_RECVD, "Submitted reply to rpc");
         return ret;
 }
 
