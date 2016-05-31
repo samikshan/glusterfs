@@ -1186,6 +1186,9 @@ exit 0
 # Extra utility script
 %{_datadir}/glusterfs/scripts/stop-all-gluster-processes.sh
 
+# CLI utils
+%{_libexecdir}/glusterfs/cliutils
+
 # Incrementalapi
 %{_libexecdir}/glusterfs/glusterfind
 %{_bindir}/glusterfind
@@ -1199,6 +1202,9 @@ exit 0
 %{_sbindir}/gf_recon
 
 %changelog
+* Tue Jun 28 2016 Aravinda VK <avishwan@redhat.com>
+- Added "cliutils" python lib under $libexec/glusterfs
+
 * Tue May 31 2016 Kaleb S. KEITHLEY <kkeithle@redhat.com>
 - broken brp-python-bytecompile in RHEL7 results in installed
   but unpackaged files.
