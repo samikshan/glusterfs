@@ -4940,6 +4940,7 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
         char                            *odir = NULL;
         int                             count = 0;
         int                             count_bkp = 0;
+        char                            localhost[1024] = {0,};
 
         this = THIS;
         GF_ASSERT (this);
@@ -4980,15 +4981,29 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
                 count = 0;
                 cds_list_for_each_entry (brickinfo, &volinfo->bricks, brick_list) {
                         fprintf (fp, "Volume%d.Brick%d.path: %s:%s\n", count_bkp, ++count, brickinfo->hostname, brickinfo->path);
-                        fprintf (fp, "Volume%d.Brick%d.port: %d\n", count_bkp, count, brickinfo->port);
-                        fprintf (fp, "Volume%d.Brick%d.status: %d\n", count_bkp, count, brickinfo->status);
                         fprintf (fp, "Volume%d.Brick%d.hostname: %s\n", count_bkp, count, brickinfo->hostname);
-                        fprintf (fp, "Volume%d.Brick%d.uuid: %s\n", count_bkp, count, gf_strdup (uuid_utoa (brickinfo->uuid)));
-                        fprintf (fp, "Volume%d.Brick%d.filesystem_type: %s\n", count_bkp, count, brickinfo->fstype);
-                        fprintf (fp, "Volume%d.Brick%d.mount_options: %s\n", count_bkp, count, brickinfo->mnt_opts);
                 }
                 count = count_bkp;
                 fprintf (fp, "\n");
+        }
+
+        fprintf (fp, "\n[Local Bricks]\n");
+
+        ret = gethostname (localhost, sizeof(localhost));
+        if (ret)
+                goto out;
+
+        cds_list_for_each_entry (volinfo, &priv->volumes, vol_list) {
+                count = 0;
+                cds_list_for_each_entry (brickinfo, &volinfo->bricks, brick_list) {
+                        if (!gf_is_same_address (localhost, brickinfo->hostname))
+                                continue;
+                        fprintf (fp, "Brick%d.path: %s:%s\n", ++count, brickinfo->hostname, brickinfo->path);
+                        fprintf (fp, "Brick%d.port: %d\n", count, brickinfo->port);
+                        fprintf (fp, "Brick%d.status: %d\n", count, brickinfo->status);
+                        fprintf (fp, "Brick%d.filesystem_type: %s\n", count, brickinfo->fstype);
+                        fprintf (fp, "Brick%d.mount_options: %s\n", count, brickinfo->mnt_opts);
+                }
         }
 
         count = 0;
@@ -5006,14 +5021,16 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
 
 
         fprintf (fp, "[Ports]\n");
-        fprintf (fp, "Base port: %d\n", priv->pmap->base_port);
-        fprintf (fp, "Last allocated port: %d\n\n", priv->pmap->last_alloc);
+        if (priv->pmap) {
+                fprintf (fp, "Base port: %d\n", priv->pmap->base_port);
+                fprintf (fp, "Last allocated port: %d\n\n", priv->pmap->last_alloc);
+        }
 
         fprintf (fp, "op-version: %d\n", priv->op_version);
 
         fclose (fp);
 out:
-        rsp.op_ret = 0;
+        rsp.op_ret = ret;
         rsp.op_errstr = "";
 
         ret = dict_allocate_and_serialize (dict, &rsp.dict.dict_val,
