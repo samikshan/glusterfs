@@ -35,7 +35,7 @@ cli_cmd_global_help_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
 int cli_cmd_ganesha_cbk (struct cli_state *state, struct cli_cmd_word *word,
                                          const char **words, int wordcount);
 int
-cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
+cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word,
                               const char **words, int wordcount);
 
 struct cli_cmd global_cmds[] = {
@@ -47,7 +47,7 @@ struct cli_cmd global_cmds[] = {
            cli_cmd_ganesha_cbk,
           "Enable/disable NFS-Ganesha support",
         },
-        { "daemon get-state <DAEMON> odir </path/to/output/dir/>",
+        { "daemon get-state [<DAEMON>] odir </path/to/output/dir/>",
           cli_cmd_daemon_get_state_cbk,
           "Get state of daemon",
         },
@@ -140,7 +140,7 @@ out:
 }
 
 int
-cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
+cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word,
                               const char **words, int wordcount)
 {
         int                     sent        =   0;
@@ -159,8 +159,17 @@ cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *in_w
         ret = cli_cmd_daemon_get_state_parse (state, words, wordcount,
                                               &options, &op_errstr);
 
-        if (ret)
+        if (ret) {
+                if (op_errstr) {
+                    cli_err ("%s", op_errstr);
+                    cli_usage_out (word->pattern);
+                    GF_FREE (op_errstr);
+                } else
+                    cli_usage_out (word->pattern);
+
+                parse_error = 1;
                 goto out;
+        }
 
         CLI_LOCAL_INIT (local, words, frame, options);
 
@@ -177,5 +186,5 @@ out:
         CLI_STACK_DESTROY (frame);
 
         return ret;
-
 }
+

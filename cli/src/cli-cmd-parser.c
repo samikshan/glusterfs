@@ -941,11 +941,20 @@ cli_cmd_daemon_get_state_parse (struct cli_state *state, const char **words, int
 
         if (wordcount == 5) {
                 if (strcmp (words[2], "glusterd") == 0) {
-                        cli_out ("Dumping state for glusterd");
                         dict_set_str (dict, "odir", words[4]);
                         dict_set_str (dict, "daemon", words[2]);
                         ret = 0;
                 }
+        } else if ((wordcount == 4) && (strcmp (words[2], "odir") == 0)) {
+                dict_set_str (dict, "odir", words[3]);
+
+                /* Dump state for glusterd by default if no other daemons are mentioned */
+                dict_set_str (dict, "daemon", "glusterd");
+
+                ret = 0;
+        } else {
+                *op_errstr = gf_strdup ("Problem parsing arguments. Check usage.");
+                ret = -1;
         }
 
         if (ret)
