@@ -4970,6 +4970,10 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
         count = 0;
         fprintf (fp, "\n[Volumes]\n");
 
+        ret = gethostname (localhost, sizeof(localhost));
+        if (ret)
+                goto out;
+
         cds_list_for_each_entry (volinfo, &priv->volumes, vol_list) {
                 fprintf (fp, "Volume%d.name: %s\n", ++count, volinfo->volname);
                 fprintf (fp, "Volume%d.id: %s\n", count, gf_strdup (uuid_utoa (volinfo->volume_id)));
@@ -4982,28 +4986,17 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
                 cds_list_for_each_entry (brickinfo, &volinfo->bricks, brick_list) {
                         fprintf (fp, "Volume%d.Brick%d.path: %s:%s\n", count_bkp, ++count, brickinfo->hostname, brickinfo->path);
                         fprintf (fp, "Volume%d.Brick%d.hostname: %s\n", count_bkp, count, brickinfo->hostname);
+
+                        /* Add foloowing information only for bricks local to current node */
+                        if (!gf_is_same_address (localhost, brickinfo->hostname))
+                                continue;
+                        fprintf (fp, "Volume%d.Brick%d.port: %d\n", count_bkp, count, brickinfo->port);
+                        fprintf (fp, "Volume%d.Brick%d.status: %d\n", count_bkp, count, brickinfo->status);
+                        fprintf (fp, "Volume%d.Brick%d.filesystem_type: %s\n", count_bkp, count, brickinfo->fstype);
+                        fprintf (fp, "Volume%d.Brick%d.mount_options: %s\n", count_bkp, count, brickinfo->mnt_opts);
                 }
                 count = count_bkp;
                 fprintf (fp, "\n");
-        }
-
-        fprintf (fp, "\n[Local Bricks]\n");
-
-        ret = gethostname (localhost, sizeof(localhost));
-        if (ret)
-                goto out;
-
-        cds_list_for_each_entry (volinfo, &priv->volumes, vol_list) {
-                count = 0;
-                cds_list_for_each_entry (brickinfo, &volinfo->bricks, brick_list) {
-                        if (!gf_is_same_address (localhost, brickinfo->hostname))
-                                continue;
-                        fprintf (fp, "Brick%d.path: %s:%s\n", ++count, brickinfo->hostname, brickinfo->path);
-                        fprintf (fp, "Brick%d.port: %d\n", count, brickinfo->port);
-                        fprintf (fp, "Brick%d.status: %d\n", count, brickinfo->status);
-                        fprintf (fp, "Brick%d.filesystem_type: %s\n", count, brickinfo->fstype);
-                        fprintf (fp, "Brick%d.mount_options: %s\n", count, brickinfo->mnt_opts);
-                }
         }
 
         count = 0;
@@ -5020,10 +5013,10 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
         }
 
 
-        fprintf (fp, "[Ports]\n");
+        fprintf (fp, "\n[Misc]\n");
         if (priv->pmap) {
                 fprintf (fp, "Base port: %d\n", priv->pmap->base_port);
-                fprintf (fp, "Last allocated port: %d\n\n", priv->pmap->last_alloc);
+                fprintf (fp, "Last allocated port: %d\n", priv->pmap->last_alloc);
         }
 
         fprintf (fp, "op-version: %d\n", priv->op_version);
