@@ -503,6 +503,73 @@ out:
         return ret;
 }
 
+int
+gf_cli_get_state_cbk (struct rpc_req *req, struct iovec *iov,
+                      int count, void *myframe)
+{
+        gf_cli_rsp           rsp            = {0,};
+        int                  ret            = -1;
+        dict_t               *dict          = NULL;
+        char                 *daemon_name   = NULL;
+        char                 *ofilepath     = NULL;
+
+        GF_VALIDATE_OR_GOTO ("cli", myframe, out);
+
+        if (-1 == req->rpc_status) {
+                goto out;
+        }
+        ret = xdr_to_generic (*iov, &rsp, (xdrproc_t)xdr_gf_cli_rsp);
+        if (ret < 0) {
+                gf_log (((call_frame_t *) myframe)->this->name, GF_LOG_ERROR,
+                        "Failed to decode xdr response");
+                goto out;
+        }
+
+        dict = dict_new ();
+
+        if (!dict) {
+                ret = -1;
+                goto out;
+        }
+
+        ret = dict_unserialize (rsp.dict.dict_val, rsp.dict.dict_len, &dict);
+        if (ret)
+                goto out;
+
+        if (rsp.op_ret) {
+                if (strcmp (rsp.op_errstr, ""))
+                        cli_err ("Failed to get daemon state: %s", rsp.op_errstr);
+                else
+                        cli_err ("Failed to get daemon state. Check glusterd"
+                                 " log file for more details");
+        } else {
+                ret = dict_get_str (dict, "daemon", &daemon_name);
+                if (ret)
+                        gf_log ("cli", GF_LOG_ERROR, "Couldn't get daemon name");
+
+                ret = dict_get_str (dict, "ofilepath", &ofilepath);
+                if (ret)
+                        gf_log ("cli", GF_LOG_ERROR, "Couldn't get filepath");
+
+                if (daemon_name && ofilepath)
+                        cli_out ("%s state dumped to %s",
+                                 daemon_name, ofilepath);
+        }
+
+        ret = rsp.op_ret;
+
+out:
+        free (rsp.dict.dict_val);
+        free (rsp.op_errstr);
+
+        if (dict)
+                dict_unref (dict);
+
+        cli_cmd_broadcast_response (ret);
+
+        return ret;
+}
+
 void
 cli_out_options ( char *substr, char *optstr, char *valstr)
 {
@@ -4140,6 +4207,32 @@ out:
                 frame->local = NULL;
         }
         gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);
+        return ret;
+}
+
+int32_t
+gf_cli_get_state (call_frame_t *frame, xlator_t *this, void *data)
+{
+        gf_cli_req              req =  {{0,},};
+        int                     ret = 0;
+        dict_t                  *dict = NULL;
+
+        char                    *odir       =  NULL;
+
+        if (!frame || !this ||  !data) {
+                ret = -1;
+                goto out;
+        }
+
+        dict = data;
+
+        ret = cli_to_glusterd (&req, frame, gf_cli_get_state_cbk,
+                               (xdrproc_t) xdr_gf_cli_req, dict,
+                               GLUSTER_CLI_GET_STATE, this, cli_rpc_prog,
+                               NULL);
+out:
+        gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);
+
         return ret;
 }
 
@@ -10909,7 +11002,6 @@ cli_to_glusterd (gf_cli_req *req, call_frame_t *frame,
 
         ret = cli_cmd_submit (NULL, req, frame, prog, procnum, iobref, this,
                               cbkfn, (xdrproc_t) xdrproc);
-
 out:
         return ret;
 
@@ -11247,7 +11339,7 @@ struct rpc_clnt_procedure gluster_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_DEPROBE]          = {"DEPROBE_QUERY", gf_cli_deprobe},
         [GLUSTER_CLI_LIST_FRIENDS]     = {"LIST_FRIENDS", gf_cli_list_friends},
         [GLUSTER_CLI_UUID_RESET]       = {"UUID_RESET", gf_cli3_1_uuid_reset},
-        [GLUSTER_CLI_UUID_GET]       = {"UUID_GET", gf_cli3_1_uuid_get},
+        [GLUSTER_CLI_UUID_GET]         = {"UUID_GET", gf_cli3_1_uuid_get},
         [GLUSTER_CLI_CREATE_VOLUME]    = {"CREATE_VOLUME", gf_cli_create_volume},
         [GLUSTER_CLI_DELETE_VOLUME]    = {"DELETE_VOLUME", gf_cli_delete_volume},
         [GLUSTER_CLI_START_VOLUME]     = {"START_VOLUME", gf_cli_start_volume},
@@ -11288,7 +11380,8 @@ struct rpc_clnt_procedure gluster_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_BITROT]           = {"BITROT", gf_cli_bitrot},
         [GLUSTER_CLI_ATTACH_TIER]      = {"ATTACH_TIER", gf_cli_attach_tier},
         [GLUSTER_CLI_DETACH_TIER]      = {"DETACH_TIER", gf_cli_detach_tier},
-        [GLUSTER_CLI_TIER]             = {"TIER", gf_cli_tier}
+        [GLUSTER_CLI_TIER]             = {"TIER", gf_cli_tier},
+        [GLUSTER_CLI_GET_STATE]        = {"GET_STATE", gf_cli_get_state}
 };
 
 struct rpc_clnt_program cli_prog = {

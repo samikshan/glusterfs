@@ -11218,6 +11218,88 @@ glusterd_is_volume_started (glusterd_volinfo_t  *volinfo)
         return (volinfo->status == GLUSTERD_STATUS_STARTED);
 }
 
+int
+glusterd_volume_get_status_str (glusterd_volinfo_t *volinfo, char *status_str)
+{
+        int ret = -1;
+
+        if (volinfo == NULL)
+                goto out;
+
+        switch (volinfo->status) {
+        case GLUSTERD_STATUS_NONE:
+                sprintf (status_str, "%s", "Created");
+                break;
+        case GLUSTERD_STATUS_STARTED:
+                sprintf (status_str, "%s", "Started");
+                break;
+        case GLUSTERD_STATUS_STOPPED:
+                sprintf (status_str, "%s", "Stopped");
+                break;
+        default:
+                goto out;
+
+        }
+        ret = 0;
+out:
+        return ret;
+}
+
+int
+glusterd_volume_get_transport_type_str (glusterd_volinfo_t *volinfo,
+                                        char *transport_type_str)
+{
+        int ret = -1;
+
+        if (volinfo == NULL)
+                goto out;
+
+        switch (volinfo->transport_type) {
+        case GF_TRANSPORT_TCP:
+                sprintf (transport_type_str, "%s", "tcp");
+                break;
+        case GF_TRANSPORT_RDMA:
+                sprintf (transport_type_str, "%s", "rdma");
+                break;
+        case GF_TRANSPORT_BOTH_TCP_RDMA:
+                sprintf (transport_type_str, "%s", "tcp_rdma_both");
+                break;
+        default:
+                goto out;
+
+        }
+        ret = 0;
+out:
+        return ret;
+}
+
+int
+glusterd_volume_get_quorum_status_str (glusterd_volinfo_t *volinfo,
+                                       char *quorum_status_str)
+{
+        int ret = -1;
+        if (volinfo == NULL)
+                goto out;
+
+        switch (volinfo->transport_type) {
+        case NOT_APPLICABLE_QUORUM:
+                sprintf (quorum_status_str, "%s", "not_applicable");
+                break;
+        case MEETS_QUORUM:
+                sprintf (quorum_status_str, "%s", "meets");
+                break;
+        case DOESNT_MEET_QUORUM:
+                sprintf (quorum_status_str, "%s", "does_not_meet");
+                break;
+        default:
+                goto out;
+
+        }
+        ret = 0;
+out:
+        return ret;
+}
+
 /* This function will insert the element to the list in a order.
    Order will be based on the compare function provided as a input.
    If element to be inserted in ascending order compare should return:
@@ -11399,9 +11481,9 @@ glusterd_handle_replicate_brick_ops (glusterd_volinfo_t *volinfo,
 
         switch (op) {
         case GD_OP_REPLACE_BRICK:
-        if (dict_get_str (THIS->options, "transport.socket.bind-address",
-                          &volfileserver) != 0)
-                volfileserver = "localhost";
+                if (dict_get_str (THIS->options, "transport.socket.bind-address",
+                                  &volfileserver) != 0)
+                        volfileserver = "localhost";
 
                 snprintf (logfile, sizeof (logfile),
                           DEFAULT_LOG_FILE_DIRECTORY"/%s-replace-brick-mount.log",

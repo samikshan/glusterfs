@@ -931,6 +931,231 @@ out:
 }
 
 int32_t
+cli_cmd_get_state_parse (struct cli_state *state,
+                         const char **words, int wordcount,
+                         dict_t **options, char **op_errstr)
+{
+        dict_t    *dict                 = NULL;
+        int        ret                  = -1;
+        uint32_t   cmd                  = 0;
+        char      *odir                 = NULL;
+        char      *filename             = NULL;
+        char       ofilepath[4096]      = {0,};
+        char      *daemon_name          = NULL;
+        time_t     now                  = 0;
+        char       timestamp[16]        = {0,};
+
+        GF_VALIDATE_OR_GOTO ("cli", options, out);
+        GF_VALIDATE_OR_GOTO ("cli", words, out);
+
+        dict = dict_new ();
+        if (!dict)
+                goto out;
+
+        if (wordcount == 6) {   /* All parameters present */
+                if (strcmp (words[1], "glusterd") == 0) {
+                        odir = (char *) words[3];
+                        filename = (char *) words[5];
+
+                        sprintf (ofilepath, "%s%s", odir, filename);
+
+                        ret = dict_set_str (dict, "ofilepath", ofilepath);
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting filepath to"
+                                                        " dictionary failed");
+                                goto out;
+                        }
+
+                        daemon_name = (char *) words[1];
+                        ret = dict_set_str (dict, "daemon", daemon_name);
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting daemon name to"
+                                                        " dictionary failed");
+                                goto out;
+                        }
+                        ret = 0;
+                } else {
+                        *op_errstr = gf_strdup ("glusterd is the only daemon "
+                                                "supported for now");
+                        goto out;
+                }
+        } else if (wordcount == 5) {    /* No daemon name */
+                odir = (char *) words[2];
+                filename = (char *) words[4];
+
+                sprintf (ofilepath, "%s%s", odir, filename);
+
+                ret = dict_set_str (dict, "ofilepath", ofilepath);
+                if (ret) {
+                        *op_errstr = gf_strdup ("Setting filepath to "
+                                                "dictionary failed");
+                        goto out;
+                }
+
+                /* Dump state for glusterd by default */
+                ret = dict_set_str (dict, "daemon", "glusterd");
+                if (ret) {
+                        *op_errstr = gf_strdup ("Setting daemon name to"
+                                                " dictionary failed");
+                        goto out;
+                }
+
+                ret = 0;
+
+        } else if (wordcount == 4) {    /* file or odir param missing */
+                if (strcmp (words[1], "glusterd") != 0) {
+                        *op_errstr = gf_strdup ("glusterd is the only daemon"
+                                                " supported for now");
+                        goto out;
+                }
+                daemon_name = (char *) words[1];
+
+                ret = dict_set_str (dict, "daemon", daemon_name);
+                if (ret) {
+                        *op_errstr = gf_strdup ("Setting daemon name to"
+                                                "dictionary failed");
+                        goto out;
+                }
+
+                if (strcmp (words[2], "odir") == 0) {
+                        odir = (char *) words[3];
+
+                        now = time (NULL);
+                        strftime (timestamp, sizeof (timestamp),
+                                  "%Y%m%d_%H%M%S", localtime (&now));
+
+                        gf_asprintf (&filename, "%s_%s", "glusterd_state", timestamp);
+
+                        sprintf (ofilepath, "%s%s", odir, filename);
+
+                        ret = dict_set_str (dict, "ofilepath", ofilepath);
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting filepath to "
+                                                      "dictionary failed");
+                                goto out;
+                        }
+                } else if (strcmp (words[2], "file") == 0) {
+                        filename = (char *) words[3];
+                        sprintf (ofilepath, "/var/run/gluster/%s", filename);
+
+                        ret = dict_set_str (dict, "ofilepath", ofilepath);
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting filepath to "
+                                                      "dictionary failed");
+                                goto out;
+                        }
+                } else {
+                        *op_errstr = gf_strdup ("Problem parsing arguments."
+                                                " Check usage.");
+                        goto out;
+                }
+
+                ret = 0;
+
+        } else if (wordcount == 3) {  /* daemon and file/odir param missing */
+                /* Get state for glusterd by default */
+                ret = dict_set_str (dict, "daemon", "glusterd");
+                if (ret) {
+                        *op_errstr = gf_strdup ("Setting daemon name to"
+                                                "dictionary failed");
+                        goto out;
+                }
+
+                if (strcmp (words[1], "odir") == 0) {
+                        odir = (char *) words[2];
+
+                        now = time (NULL);
+                        strftime (timestamp, sizeof (timestamp),
+                                  "%Y%m%d_%H%M%S", localtime (&now));
+                        gf_asprintf (&filename, "%s_%s", "glusterd_state", timestamp);
+
+                        sprintf (ofilepath, "%s%s", odir, filename);
+
+                        ret = dict_set_str (dict, "ofilepath", ofilepath);
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting filepath to "
+                                                      "dictionary failed");
+                                goto out;
+                        }
+                } else if (strcmp (words[1], "file") == 0) {
+                        filename = (char *) words[2];
+                        sprintf (ofilepath, "/var/run/gluster/%s", filename);
+
+                        cli_out ("%s", ofilepath);
+                        ret = dict_set_str (dict, "ofilepath", ofilepath);
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting filepath to "
+                                                        "dictionary failed");
+                                goto out;
+                        }
+                } else {
+                        *op_errstr = gf_strdup ("Problem parsing arguments."
+                                                " Check usage.");
+                        goto out;
+                }
+
+                ret = 0;
+
+        } else if (wordcount == 1 || wordcount == 2) {
+                now = time (NULL);
+                strftime (timestamp, sizeof (timestamp),
+                          "%Y%m%d_%H%M%S", localtime (&now));
+                gf_asprintf (&filename, "%s_%s", "glusterd_state", timestamp);
+
+                sprintf (ofilepath, "%s%s",
+                                 gf_strdup ("/var/run/gluster/"), filename);
+
+                ret = dict_set_str (dict, "ofilepath", ofilepath);
+                if (ret) {
+                        *op_errstr = gf_strdup ("Setting filepath to "
+                                                "dictionary failed");
+                        goto out;
+                }
+
+                if (wordcount == 2) {
+                        if (strcmp (words[1], "glusterd") != 0) {
+                                *op_errstr = gf_strdup ("glusterd is the only daemon"
+                                                        " supported for now");
+                                ret = -1;
+                                goto out;
+                        }
+                        daemon_name = (char *) words[1];
+
+                        ret = dict_set_str (dict, "daemon", daemon_name);
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting daemon name to"
+                                                        "dictionary failed");
+                                goto out;
+                        }
+                } else {
+                        /* Get state for glusterd by default */
+                        ret = dict_set_str (dict, "daemon", "glusterd");
+                        if (ret) {
+                                *op_errstr = gf_strdup ("Setting daemon name to"
+                                                        "dictionary failed");
+                                goto out;
+                        }
+                }
+                ret = 0;
+        } else {
+                *op_errstr = gf_strdup ("Problem parsing arguments. "
+                                        "Check usage.");
+                ret = -1;
+        }
+
+        if (ret)
+                goto out;
+
+        *options = dict;
+
+ out:
+        if (ret && dict)
+                dict_destroy (dict);
+
+        return ret;
+}
+
+int32_t
 cli_cmd_inode_quota_parse (const char **words, int wordcount, dict_t **options)
 {
         dict_t          *dict    = NULL;

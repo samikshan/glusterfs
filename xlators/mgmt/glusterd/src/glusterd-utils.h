@@ -678,6 +678,17 @@ glusterd_nfs_pmap_deregister ();
 gf_boolean_t
 glusterd_is_volume_started (glusterd_volinfo_t  *volinfo);
 
+int
+glusterd_volume_get_status_str (glusterd_volinfo_t *volinfo, char *status_str);
+
+int
+glusterd_volume_get_transport_type_str (glusterd_volinfo_t *volinfo,
+                                        char *transport_type_str);
+
+int
+glusterd_volume_get_quorum_status_str (glusterd_volinfo_t *volinfo,
+                                       char *quorum_status_str);
+
 void
 glusterd_list_add_order (struct cds_list_head *new, struct cds_list_head *head,
                         int (*compare)(struct cds_list_head *,
