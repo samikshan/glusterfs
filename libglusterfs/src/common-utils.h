@@ -205,6 +205,8 @@ struct list_node {
         struct list_head list;
 };
 
+extern char *vol_type_str[];
+
 struct list_node *list_node_add (void *ptr, struct list_head *list);
 struct list_node *list_node_add_order (void *ptr, struct list_head *list,
                                        int (*compare)(struct list_head *,
@@ -761,6 +763,7 @@ void gf_array_insertionsort (void *a, int l, int r, size_t elem_size,
 int gf_is_str_int (const char *value);
 
 char *gf_uint64_2human_readable (uint64_t);
+int get_vol_type (int type, int dist_count, int brick_count);
 int validate_brick_name (char *brick);
 char *get_host_name (char *word, char **host);
 char *get_path_name (char *word, char **path);
