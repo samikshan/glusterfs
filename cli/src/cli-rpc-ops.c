@@ -504,14 +504,16 @@ out:
 }
 
 int
-gf_cli_daemon_get_state_cbk (struct rpc_req *req, struct iovec *iov,
-                             int count, void *myframe)
+gf_cli_get_state_cbk (struct rpc_req *req, struct iovec *iov,
+                      int count, void *myframe)
 {
-        gf_cli_rsp           rsp   = {0,};
-        int                  ret   = -1;
-        dict_t               *dict = NULL;
-        char                 *help_str = NULL;
-        GF_ASSERT (myframe);
+        gf_cli_rsp           rsp            = {0,};
+        int                  ret            = -1;
+        dict_t               *dict          = NULL;
+        char                 *daemon_name   = NULL;
+        char                 *ofilepath     = NULL;
+
+        GF_VALIDATE_OR_GOTO ("cli", myframe, out);
 
         if (-1 == req->rpc_status) {
                 goto out;
@@ -522,8 +524,6 @@ gf_cli_daemon_get_state_cbk (struct rpc_req *req, struct iovec *iov,
                         "Failed to decode xdr response");
                 goto out;
         }
-
-        gf_log ("cli", GF_LOG_INFO, "Received resp to glusterd");
 
         dict = dict_new ();
 
@@ -540,19 +540,33 @@ gf_cli_daemon_get_state_cbk (struct rpc_req *req, struct iovec *iov,
                 if (strcmp (rsp.op_errstr, ""))
                         cli_err ("Failed to get daemon state: %s", rsp.op_errstr);
                 else
-                        cli_err ("Failed to get daemon state");
-        }
+                        cli_err ("Failed to get daemon state. Check glusterd"
+                                 " log file for more details");
+        } else {
+                ret = dict_get_str (dict, "daemon", &daemon_name);
+                if (ret)
+                        gf_log ("cli", GF_LOG_ERROR, "Couldn't get daemon name");
 
-        else {
-                cli_out("Got daemon state");
+                ret = dict_get_str (dict, "ofilepath", &ofilepath);
+                if (ret)
+                        gf_log ("cli", GF_LOG_ERROR, "Couldn't get filepath");
+
+                if (daemon_name && ofilepath)
+                        cli_out ("%s state dumped to %s",
+                                 daemon_name, ofilepath);
         }
 
         ret = rsp.op_ret;
 
 out:
+        free (rsp.dict.dict_val);
+        free (rsp.op_errstr);
+
         if (dict)
                 dict_unref (dict);
+
         cli_cmd_broadcast_response (ret);
+
         return ret;
 }
 
@@ -868,11 +882,6 @@ gf_cli_get_volume_cbk (struct rpc_req *req, struct iovec *iov,
         gf_log ("cli", GF_LOG_INFO, "Received resp to get vol: %d",
                 rsp.op_ret);
 
-        if (rsp.op_ret) {
-                ret = -1;
-                goto out;
-        }
-
         if (!rsp.dict.dict_len) {
                 if (global_state->mode & GLUSTER_MODE_XML)
                         goto xml_output;
@@ -920,6 +929,13 @@ gf_cli_get_volume_cbk (struct rpc_req *req, struct iovec *iov,
                         if (!(global_state->mode & GLUSTER_MODE_XML))
                                 goto out;
                 }
+        }
+
+        if (rsp.op_ret) {
+                if (global_state->mode & GLUSTER_MODE_XML)
+                        goto xml_output;
+                ret = -1;
+                goto out;
         }
 
 xml_output:
@@ -1612,13 +1628,32 @@ gf_cli_print_rebalance_status (dict_t *dict, enum gf_task_types task_type,
                 goto out;
         }
 
+        memset (key, 0, 256);
+        snprintf (key, 256, "status-1");
 
-        cli_out ("%40s %16s %13s %13s %13s %13s %20s %18s", "Node",
-                 "Rebalanced-files", "size", "scanned", "failures", "skipped",
-                 "status", "run time in h:m:s");
-        cli_out ("%40s %16s %13s %13s %13s %13s %20s %18s", "---------",
-                 "-----------", "-----------", "-----------", "-----------",
-                 "-----------", "------------", "--------------");
+        ret = dict_get_int32 (dict, key, (int32_t *)&status_rcd);
+        if (ret) {
+                gf_log ("cli", GF_LOG_TRACE, "count %d %d", count, 1);
+                gf_log ("cli", GF_LOG_TRACE, "failed to get status");
+                goto out;
+        }
+
+        if (status_rcd >= GF_DEFRAG_STATUS_LAYOUT_FIX_STARTED) {
+                cli_out ("%10s %40s %18s", "Node", "status",
+                         "run time in h:m:s");
+                cli_out ("%10s %40s %18s", "---------", "-----------",
+                         "------------");
+        } else {
+                cli_out ("%40s %16s %13s %13s %13s %13s %20s %18s",
+                         "Node", "Rebalanced-files", "size", "scanned",
+                         "failures", "skipped", "status", "run time in"
+                         " h:m:s");
+                cli_out ("%40s %16s %13s %13s %13s %13s %20s %18s",
+                         "---------", "-----------", "-----------",
+                         "-----------", "-----------", "-----------",
+                         "------------", "--------------");
+        }
+
         for (i = 1; i <= count; i++) {
                 /* Reset the variables to prevent carryover of values */
                 node_name = NULL;
@@ -1715,16 +1750,23 @@ gf_cli_print_rebalance_status (dict_t *dict, enum gf_task_types task_type,
                 min = ((int) elapsed % 3600) / 60;
                 sec = ((int) elapsed % 3600) % 60;
 
-                if (size_str) {
-                        cli_out ("%40s %16"PRIu64 " %13s" " %13"PRIu64 " %13"
-                                 PRIu64" %13"PRIu64 " %20s %8d:%d:%d",
-                                 node_name, files, size_str, lookup, failures,
-                                 skipped, status_str, hrs, min, sec);
+                if (status_rcd >= GF_DEFRAG_STATUS_LAYOUT_FIX_STARTED) {
+                        cli_out ("%10s %40s %8d:%d:%d", node_name, status_str,
+                                 hrs, min, sec);
                 } else {
-                        cli_out ("%40s %16"PRIu64 " %13"PRIu64 " %13"PRIu64
-                                 " %13"PRIu64" %13"PRIu64 " %20s %8d:%d:%d",
-                                 node_name, files, size, lookup, failures,
-                                 skipped, status_str, hrs, min, sec);
+                        if (size_str) {
+                                cli_out ("%40s %16"PRIu64 " %13s" " %13"PRIu64
+                                          " %13" PRIu64" %13"PRIu64 " %20s "
+                                         "%8d:%d:%d", node_name, files,
+                                         size_str, lookup, failures, skipped,
+                                         status_str, hrs, min, sec);
+                        } else {
+                                cli_out ("%40s %16"PRIu64 " %13"PRIu64 " %13"
+                                         PRIu64 " %13"PRIu64" %13"PRIu64 " %20s"
+                                         " %8d:%d:%d", node_name, files, size,
+                                         lookup, failures, skipped, status_str,
+                                         hrs, min, sec);
+                        }
                 }
                 GF_FREE(size_str);
         }
@@ -4169,9 +4211,9 @@ out:
 }
 
 int32_t
-gf_cli_daemon_get_state (call_frame_t *frame, xlator_t *this, void *data)
+gf_cli_get_state (call_frame_t *frame, xlator_t *this, void *data)
 {
-        gf_cli_req              req =  { {0,} } ;
+        gf_cli_req              req =  {{0,},};
         int                     ret = 0;
         dict_t                  *dict = NULL;
 
@@ -4184,12 +4226,9 @@ gf_cli_daemon_get_state (call_frame_t *frame, xlator_t *this, void *data)
 
         dict = data;
 
-        ret = dict_get_str (dict, "odir", &odir);
-        cli_out ("Output dir: %s", odir);
-
-        ret = cli_to_glusterd (&req, frame, gf_cli_daemon_get_state_cbk,
+        ret = cli_to_glusterd (&req, frame, gf_cli_get_state_cbk,
                                (xdrproc_t) xdr_gf_cli_req, dict,
-                               GLUSTER_CLI_DAEMON_GET_STATE, this, cli_rpc_prog,
+                               GLUSTER_CLI_GET_STATE, this, cli_rpc_prog,
                                NULL);
 out:
         gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);
@@ -7004,29 +7043,33 @@ cli_print_volume_status_clients (dict_t *dict, gf_boolean_t notbrick)
         index_max = brick_index_max + other_count;
 
         for (i = 0; i <= index_max; i++) {
+                hostname = NULL;
+                path = NULL;
+                online = -1;
+                client_count = 0;
+                clientname = NULL;
+                bytesread = 0;
+                byteswrite = 0;
+
                 cli_out ("----------------------------------------------");
 
                 memset (key, 0, sizeof (key));
                 snprintf (key, sizeof (key), "brick%d.hostname", i);
                 ret = dict_get_str (dict, key, &hostname);
-                if (ret)
-                        goto out;
+
                 memset (key, 0, sizeof (key));
                 snprintf (key, sizeof (key), "brick%d.path", i);
                 ret = dict_get_str (dict, key, &path);
-                if (ret)
-                        goto out;
 
-                if (notbrick)
-                        cli_out ("%s : %s", hostname, path);
-                else
-                        cli_out ("Brick : %s:%s", hostname, path);
-
+                if (hostname && path) {
+                        if (notbrick)
+                                cli_out ("%s : %s", hostname, path);
+                        else
+                                cli_out ("Brick : %s:%s", hostname, path);
+                }
                 memset (key, 0, sizeof (key));
                 snprintf (key, sizeof (key), "brick%d.status", i);
                 ret = dict_get_int32 (dict, key, &online);
-                if (ret)
-                        goto out;
                 if (!online) {
                         if (notbrick)
                                 cli_out ("%s is offline", hostname);
@@ -7038,10 +7081,9 @@ cli_print_volume_status_clients (dict_t *dict, gf_boolean_t notbrick)
                 memset (key, 0, sizeof (key));
                 snprintf (key, sizeof (key), "brick%d.clientcount", i);
                 ret = dict_get_int32 (dict, key, &client_count);
-                if (ret)
-                        goto out;
 
-                cli_out ("Clients connected : %d", client_count);
+                if (hostname && path)
+                        cli_out ("Clients connected : %d", client_count);
                 if (client_count == 0)
                         continue;
 
@@ -7054,22 +7096,16 @@ cli_print_volume_status_clients (dict_t *dict, gf_boolean_t notbrick)
                         snprintf (key, sizeof (key),
                                   "brick%d.client%d.hostname", i, j);
                         ret = dict_get_str (dict, key, &clientname);
-                        if (ret)
-                                goto out;
 
                         memset (key, 0, sizeof (key));
                         snprintf (key, sizeof (key),
                                   "brick%d.client%d.bytesread", i, j);
                         ret = dict_get_uint64 (dict, key, &bytesread);
-                        if (ret)
-                                goto out;
 
                         memset (key, 0, sizeof (key));
                         snprintf (key, sizeof (key),
                                  "brick%d.client%d.byteswrite", i, j);
                         ret = dict_get_uint64 (dict, key, &byteswrite);
-                        if (ret)
-                                goto out;
 
                         cli_out ("%-48s %15"PRIu64" %15"PRIu64,
                                  clientname, bytesread, byteswrite);
@@ -10996,6 +11032,8 @@ gf_cli_print_bitrot_scrub_status (dict_t *dict)
         uint64_t       seconds          = 0;
         char          *last_scrub       = NULL;
         uint64_t       error_count      = 0;
+        int8_t         scrub_running    = 0;
+        char          *scrub_state_op   = NULL;
 
 
         ret = dict_get_str (dict, "volname", &volname);
@@ -11032,9 +11070,25 @@ gf_cli_print_bitrot_scrub_status (dict_t *dict)
                 goto out;
         }
 
+        for (i = 1; i <= count; i++) {
+                memset (key, 0, 256);
+                snprintf (key, 256, "scrub-running-%d", i);
+                ret = dict_get_int8 (dict, key, &scrub_running);
+                if (ret)
+                        gf_log ("cli", GF_LOG_TRACE, "failed to get scrubbed "
+                                "files");
+                if (scrub_running)
+                        break;
+        }
+
+        if (scrub_running)
+                gf_asprintf (&scrub_state_op, "%s (In Progress)", state_scrub);
+        else
+                gf_asprintf (&scrub_state_op, "%s (Idle)", state_scrub);
+
         cli_out ("\n%s: %s\n", "Volume name ", volname);
 
-        cli_out ("%s: %s\n", "State of scrub", state_scrub);
+        cli_out ("%s: %s\n", "State of scrub", scrub_state_op);
 
         cli_out ("%s: %s\n", "Scrub impact", scrub_impact);
 
@@ -11144,6 +11198,7 @@ gf_cli_print_bitrot_scrub_status (dict_t *dict)
                  "===============");
 
 out:
+        GF_FREE (scrub_state_op);
         return 0;
 }
 
@@ -11284,7 +11339,7 @@ struct rpc_clnt_procedure gluster_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_DEPROBE]          = {"DEPROBE_QUERY", gf_cli_deprobe},
         [GLUSTER_CLI_LIST_FRIENDS]     = {"LIST_FRIENDS", gf_cli_list_friends},
         [GLUSTER_CLI_UUID_RESET]       = {"UUID_RESET", gf_cli3_1_uuid_reset},
-        [GLUSTER_CLI_UUID_GET]       = {"UUID_GET", gf_cli3_1_uuid_get},
+        [GLUSTER_CLI_UUID_GET]         = {"UUID_GET", gf_cli3_1_uuid_get},
         [GLUSTER_CLI_CREATE_VOLUME]    = {"CREATE_VOLUME", gf_cli_create_volume},
         [GLUSTER_CLI_DELETE_VOLUME]    = {"DELETE_VOLUME", gf_cli_delete_volume},
         [GLUSTER_CLI_START_VOLUME]     = {"START_VOLUME", gf_cli_start_volume},
@@ -11326,7 +11381,7 @@ struct rpc_clnt_procedure gluster_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_ATTACH_TIER]      = {"ATTACH_TIER", gf_cli_attach_tier},
         [GLUSTER_CLI_DETACH_TIER]      = {"DETACH_TIER", gf_cli_detach_tier},
         [GLUSTER_CLI_TIER]             = {"TIER", gf_cli_tier},
-        [GLUSTER_CLI_DAEMON_GET_STATE] = {"DAEMON_GET_STATE", gf_cli_daemon_get_state}
+        [GLUSTER_CLI_GET_STATE]        = {"GET_STATE", gf_cli_get_state}
 };
 
 struct rpc_clnt_program cli_prog = {

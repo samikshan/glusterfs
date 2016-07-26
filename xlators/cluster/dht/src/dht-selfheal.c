@@ -603,7 +603,6 @@ dht_selfheal_dir_xattr_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                             int op_ret, int op_errno, dict_t *xdata)
 {
         dht_local_t  *local = NULL;
-        call_frame_t *prev = NULL;
         xlator_t     *subvol = NULL;
         struct iatt  *stbuf = NULL;
         int           i = 0;
@@ -614,8 +613,7 @@ dht_selfheal_dir_xattr_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
         local = frame->local;
         layout = local->selfheal.layout;
-        prev = cookie;
-        subvol = prev->this;
+        subvol = cookie;
 
         if (op_ret == 0)
                 err = 0;
@@ -637,7 +635,7 @@ dht_selfheal_dir_xattr_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
         LOCK (&frame->lock);
         {
-                dht_iatt_merge (this, &local->stbuf, stbuf, prev->this);
+                dht_iatt_merge (this, &local->stbuf, stbuf, subvol);
         }
         UNLOCK (&frame->lock);
 
@@ -767,8 +765,8 @@ dht_selfheal_dir_xattr_persubvol (call_frame_t *frame, loc_t *loc,
         if (!gf_uuid_is_null (local->gfid))
                 gf_uuid_copy (loc->gfid, local->gfid);
 
-        STACK_WIND (frame, dht_selfheal_dir_xattr_cbk,
-                    subvol, subvol->fops->setxattr,
+        STACK_WIND_COOKIE (frame, dht_selfheal_dir_xattr_cbk,
+                    (void *) subvol, subvol, subvol->fops->setxattr,
                     loc, xattr, 0, xdata);
 
         dict_unref (xattr);
@@ -785,7 +783,7 @@ err:
 
         GF_FREE (disk_layout);
 
-        dht_selfheal_dir_xattr_cbk (frame, subvol, frame->this,
+        dht_selfheal_dir_xattr_cbk (frame, (void *) subvol, frame->this,
                                     -1, ENOMEM, NULL);
         return 0;
 }
@@ -2046,6 +2044,9 @@ dht_selfheal_directory (call_frame_t *frame, dht_selfheal_dir_cbk_t dir_cbk,
         local = frame->local;
         this = frame->this;
 
+        local->selfheal.dir_cbk = dir_cbk;
+        local->selfheal.layout = dht_layout_ref (this, layout);
+
         if (!__is_root_gfid (local->stbuf.ia_gfid)) {
                 gf_uuid_unparse(local->stbuf.ia_gfid, gfid);
                 gf_uuid_unparse(loc->parent->gfid, pgfid);
@@ -2074,9 +2075,6 @@ dht_selfheal_directory (call_frame_t *frame, dht_selfheal_dir_cbk_t dir_cbk,
 
         down     = local->selfheal.down;
         misc     = local->selfheal.misc;
-
-        local->selfheal.dir_cbk = dir_cbk;
-        local->selfheal.layout = dht_layout_ref (this, layout);
 
         if (down) {
                 gf_msg (this->name, GF_LOG_WARNING, 0,

@@ -1064,7 +1064,7 @@ glusterd_gsync_volinfo_dict_set (glusterd_volinfo_t *volinfo,
 
         ret = 0;
 out:
-        return 0;
+        return ret;
 }
 
 static int
@@ -1794,7 +1794,6 @@ glusterd_op_verify_gsync_start_options (glusterd_volinfo_t *volinfo,
         gf_boolean_t            is_template_in_use = _gf_false;
         char                    msg[2048] = {0};
         uuid_t                  uuid = {0};
-        glusterd_conf_t        *priv = NULL;
         xlator_t               *this = NULL;
         struct stat             stbuf = {0,};
         char                    statefiledir[PATH_MAX] = {0,};
@@ -1808,8 +1807,6 @@ glusterd_op_verify_gsync_start_options (glusterd_volinfo_t *volinfo,
         GF_ASSERT (op_errstr);
         GF_ASSERT (conf_path);
         GF_ASSERT (this && this->private);
-
-        priv  = this->private;
 
         if (GLUSTERD_STATUS_STARTED != volinfo->status) {
                 snprintf (msg, sizeof (msg), "Volume %s needs to be started "
@@ -2398,6 +2395,9 @@ glusterd_op_stage_copy_file (dict_t *dict, char **op_errstr)
         glusterd_conf_t *priv                   = NULL;
         struct stat      stbuf                  = {0,};
         xlator_t         *this                  = NULL;
+        char             workdir[PATH_MAX]      = {0,};
+        char             realpath_filename[PATH_MAX] = {0,};
+        char             realpath_workdir[PATH_MAX]  = {0,};
 
         this = THIS;
         GF_ASSERT (this);
@@ -2441,6 +2441,37 @@ glusterd_op_stage_copy_file (dict_t *dict, char **op_errstr)
                 }
                 snprintf (abs_filename, sizeof(abs_filename),
                           "%s/%s", priv->workdir, filename);
+
+                if (!realpath (priv->workdir, realpath_workdir)) {
+                        snprintf (errmsg, sizeof (errmsg), "Failed to get "
+                                  "realpath of %s: %s", priv->workdir,
+                                  strerror (errno));
+                        *op_errstr = gf_strdup (errmsg);
+                        ret = -1;
+                        goto out;
+                }
+
+                if (!realpath (abs_filename, realpath_filename)) {
+                        snprintf (errmsg, sizeof (errmsg), "Failed to get "
+                                  "realpath of %s: %s", filename,
+                                  strerror (errno));
+                        *op_errstr = gf_strdup (errmsg);
+                        ret = -1;
+                        goto out;
+                }
+
+                /* Add Trailing slash to workdir, without slash strncmp
+                   will succeed for /var/lib/glusterd_bad */
+                snprintf (workdir, sizeof(workdir), "%s/", realpath_workdir);
+
+                /* Protect against file copy outside $workdir */
+                if (strncmp (workdir, realpath_filename, strlen (workdir))) {
+                        snprintf (errmsg, sizeof (errmsg), "Source file"
+                                  " is outside of %s directory", priv->workdir);
+                        *op_errstr = gf_strdup (errmsg);
+                        ret = -1;
+                        goto out;
+                }
 
                 ret = sys_lstat (abs_filename, &stbuf);
                 if (ret) {
@@ -2964,9 +2995,7 @@ glusterd_op_stage_gsync_create (dict_t *dict, char **op_errstr)
         char                     *georep_session_wrkng_dir  = NULL;
         struct slave_vol_config  slave1                     = {{0},};
         int                      type                       = 0;
-        char                     monitor_status[NAME_MAX]   = {0,};
-        char                     old_slave_url_info[SLAVE_URL_INFO_MAX] = {0};
-        char                     *old_slave_url             = NULL;
+        char                     old_slave_url[SLAVE_URL_INFO_MAX] = {0};
         char                     old_confpath[PATH_MAX]     = {0};
         gf_boolean_t             is_running                 = _gf_false;
         int                      ret_status                 = 0;
@@ -3262,26 +3291,21 @@ glusterd_op_stage_gsync_create (dict_t *dict, char **op_errstr)
 
                 /* Do the check, only if different slave host/slave user */
                 if (is_different_slavehost || is_different_username) {
-                        ret = snprintf (old_confpath, sizeof(old_confpath) - 1,
-                                        "%s/"GEOREP"/%s_%s_%s/gsyncd.conf",
-                                        conf->workdir, volinfo->volname,
-                                        slave1.old_slvhost, slave_vol);
+                        (void) snprintf (old_confpath, sizeof(old_confpath) - 1,
+                                         "%s/"GEOREP"/%s_%s_%s/gsyncd.conf",
+                                         conf->workdir, volinfo->volname,
+                                         slave1.old_slvhost, slave_vol);
 
                         /* construct old slave url with (old) slave host */
-                        old_slave_url = old_slave_url_info;
-                        strncpy (old_slave_url, slave1.old_slvhost,
-                                                sizeof(old_slave_url_info));
-                        old_slave_url = strcat (old_slave_url, "::");
-                        old_slave_url = strncat (old_slave_url, slave_vol,
-                                                 sizeof(old_slave_url_info));
+                        (void) snprintf (old_slave_url,
+                                         sizeof(old_slave_url) - 1,
+                                         "%s::%s", slave1.old_slvhost,
+                                         slave_vol);
 
-                        ret = glusterd_check_gsync_running_local (
-                                                              volinfo->volname,
-                                                              old_slave_url,
-                                                              old_confpath,
-                                                              &is_running);
+                        ret = glusterd_check_gsync_running_local (volinfo->volname,
+                                 old_slave_url, old_confpath, &is_running);
                         if (_gf_true == is_running) {
-                                snprintf (errmsg, sizeof(errmsg), "Geo"
+                                (void) snprintf (errmsg, sizeof(errmsg), "Geo"
                                     "-replication session between %s and %s"
                                     " is still active. Please stop the "
                                     "session and retry.",
@@ -4254,7 +4278,10 @@ glusterd_gsync_read_frm_status (char *path, char *buf, size_t blen)
                         while (isspace (*p))
                                 *p-- = '\0';
                 }
-        } else if (ret < 0)
+        } else if (ret == 0)
+                gf_msg (this->name, GF_LOG_ERROR, 0, GD_MSG_GSYNCD_ERROR,
+                        "Status file of gsyncd is empty");
+        else /* ret < 0 */
                 gf_msg (this->name, GF_LOG_ERROR, 0, GD_MSG_GSYNCD_ERROR,
                         "Status file of gsyncd is corrupt");
 
@@ -4981,6 +5008,7 @@ glusterd_gsync_delete (glusterd_volinfo_t *volinfo, char *slave,
         char             geo_rep_dir[PATH_MAX] = "";
         char            *conf_path = NULL;
         xlator_t *this = NULL;
+        uint32_t        reset_sync_time = _gf_false;
 
         this = THIS;
         GF_ASSERT (this);
@@ -5016,6 +5044,13 @@ glusterd_gsync_delete (glusterd_volinfo_t *volinfo, char *slave,
                           "--delete", "-c", NULL);
         runner_argprintf (&runner, "%s", conf_path);
         runner_argprintf (&runner, "--iprefix=%s", DATADIR);
+
+        runner_argprintf (&runner, "--path-list=%s", path_list);
+
+        ret = dict_get_uint32 (dict, "reset-sync-time", &reset_sync_time);
+        if (!ret && reset_sync_time) {
+                runner_add_args  (&runner, "--reset-sync-time", NULL);
+        }
 
         if (volinfo) {
                 master = volinfo->volname;
@@ -6229,7 +6264,6 @@ glusterd_op_gsync_create (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
         char                old_working_dir[PATH_MAX] = {0};
         char                new_working_dir[PATH_MAX] = {0};
         char               *slave_info                = NULL;
-        char                slave_url_info[SLAVE_URL_INFO_MAX] = {0};
         char               *slave_voluuid             = NULL;
         char               *old_slavehost             = NULL;
         gf_boolean_t        is_existing_session       = _gf_false;

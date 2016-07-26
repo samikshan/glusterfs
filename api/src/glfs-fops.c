@@ -803,7 +803,6 @@ glfs_io_async_cbk (int op_ret, int op_errno, call_frame_t *frame,
 
         GF_VALIDATE_OR_GOTO ("gfapi", frame, inval);
         GF_VALIDATE_OR_GOTO ("gfapi", cookie, inval);
-        GF_VALIDATE_OR_GOTO ("gfapi", iovec, inval);
 
         gio = frame->local;
         frame->local = NULL;
@@ -817,6 +816,12 @@ glfs_io_async_cbk (int op_ret, int op_errno, call_frame_t *frame,
         if (op_ret <= 0) {
                 goto out;
         } else if (gio->op == GF_FOP_READ) {
+                if (!iovec) {
+                        op_ret = -1;
+                        op_errno = EINVAL;
+                        goto out;
+                }
+
                 op_ret = iov_copy (gio->iov, gio->count, iovec, count);
                 glfd->offset = gio->offset + op_ret;
         } else if (gio->op == GF_FOP_WRITE) {
@@ -1211,12 +1216,13 @@ pub_glfs_pwritev_async (struct glfs_fd *glfd, const struct iovec *iovec,
 
         gio->op     = GF_FOP_WRITE;
         gio->glfd   = glfd;
-        gio->count  = count;
         gio->offset = offset;
         gio->flags  = flags;
         gio->fn     = fn;
         gio->data   = data;
-        gio->iov = GF_CALLOC (1, sizeof (*(gio->iov)), gf_common_mt_iovec);
+        gio->count  = 1;
+        gio->iov = GF_CALLOC (gio->count, sizeof (*(gio->iov)),
+                              gf_common_mt_iovec);
         if (!gio->iov) {
                 errno = ENOMEM;
                 goto out;

@@ -172,7 +172,7 @@ Vendor:           Gluster Community
 %endif
 License:          GPLv2 or LGPLv3+
 Group:            System Environment/Base
-URL:              http://www.gluster.org/docs/index.php/GlusterFS
+URL:              http://gluster.readthedocs.io/en/latest/
 %if ( 0%{_for_fedora_koji_builds} )
 Source0:          http://bits.gluster.org/pub/gluster/glusterfs/src/glusterfs-%{version}%{?prereltag}.tar.gz
 Source1:          glusterd.sysconfig
@@ -1067,6 +1067,7 @@ exit 0
 # introducing glusterfs module in site packages.
 # so that all other gluster submodules can reside in the same namespace.
 %{python_sitelib}/gluster/__init__.*
+%{python_sitelib}/gluster/cliutils
 
 %if ( 0%{!?_without_rdma:1} )
 %files rdma
@@ -1216,7 +1217,7 @@ exit 0
 %{_libexecdir}/glusterfs/peer_add_secret_pub
 
 %if ( 0%{?_with_firewalld:1} )
-/usr/lib/firewalld/services/glusterfs.xml
+%{_prefix}/lib/firewalld/services/glusterfs.xml
 %endif
 
 %{_sbindir}/gf_logdump
@@ -1238,11 +1239,11 @@ exit 0
 %endif
 
 %changelog
-* Tue Jun 28 2016 Aravinda VK <avishwan@redhat.com>
-- Added "cliutils" python lib under $libexec/glusterfs
+* Thu Jul 14 2016 Aravinda VK <avishwan@redhat.com>
+- Removed extra packaging line of cliutils(python-gluster)(#1342356)
 
-* Tue Jun 07 2016 Aravinda VK <avishwan@redhat.com>
-- Added new subpackage events(glusterfs-events) (#1334044)
+* Mon Jul 11 2016 Aravinda VK <avishwan@redhat.com>
+- Added Python subpackage "cliutils" under gluster
 
 * Tue May 31 2016 Kaleb S. KEITHLEY <kkeithle@redhat.com>
 - broken brp-python-bytecompile in RHEL7 results in installed

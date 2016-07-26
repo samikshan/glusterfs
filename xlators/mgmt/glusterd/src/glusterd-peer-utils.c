@@ -393,6 +393,57 @@ gd_peer_uuid_str (glusterd_peerinfo_t *peerinfo)
         return peerinfo->uuid_str;
 }
 
+int
+gd_peer_state_str (glusterd_peerinfo_t *peerinfo, char *state_str)
+{
+        int ret = -1;
+
+        if (peerinfo == NULL)
+                goto out;
+
+        switch (peerinfo->state.state) {
+        case GD_FRIEND_STATE_DEFAULT:
+                sprintf (state_str, "%s", "default");
+                break;
+        case GD_FRIEND_STATE_REQ_SENT:
+                sprintf (state_str, "%s", "request sent");
+                break;
+        case GD_FRIEND_STATE_REQ_RCVD:
+                sprintf (state_str, "%s", "request received");
+                break;
+        case GD_FRIEND_STATE_BEFRIENDED:
+                sprintf (state_str, "%s", "befriended");
+                break;
+        case GD_FRIEND_STATE_REQ_ACCEPTED:
+                sprintf (state_str, "%s", "request accepted");
+                break;
+        case GD_FRIEND_STATE_REQ_SENT_RCVD:
+                sprintf (state_str, "%s", "request sent received");
+                break;
+        case GD_FRIEND_STATE_REJECTED:
+                sprintf (state_str, "%s", "rejected");
+                break;
+        case GD_FRIEND_STATE_UNFRIEND_SENT:
+                sprintf (state_str, "%s", "unfriend sent");
+                break;
+        case GD_FRIEND_STATE_PROBE_RCVD:
+                sprintf (state_str, "%s", "probe received");
+                break;
+        case GD_FRIEND_STATE_CONNECTED_RCVD:
+                sprintf (state_str, "%s", "connected received");
+                break;
+        case GD_FRIEND_STATE_CONNECTED_ACCEPTED:
+                sprintf (state_str, "%s", "connected accepted");
+                break;
+        case GD_FRIEND_STATE_MAX:
+                goto out;
+        }
+
+        ret = 0;
+out:
+        return ret;
+}
+
 gf_boolean_t
 glusterd_are_all_peers_up ()
 {
@@ -1033,4 +1084,26 @@ glusterd_peerinfo_find_by_generation (uint32_t generation) {
                         "Friend with generation: %"PRIu32", not found",
                         generation);
         return found;
+}
+
+int
+glusterd_get_peers_count () {
+        int                  count = 0;
+        xlator_t            *this  = NULL;
+        glusterd_conf_t     *conf  = NULL;
+        glusterd_peerinfo_t *peer  = NULL;
+
+        this = THIS;
+        GF_VALIDATE_OR_GOTO ("glusterd", this, out);
+
+        conf = this->private;
+        GF_VALIDATE_OR_GOTO (this->name, conf, out);
+
+        rcu_read_lock ();
+        cds_list_for_each_entry_rcu (peer, &conf->peers, uuid_list)
+                count++;
+        rcu_read_unlock ();
+
+out:
+        return count;
 }

@@ -37,6 +37,7 @@ void trap (void);
 #include "locking.h"
 #include "mem-pool.h"
 #include "compat-uuid.h"
+#include "iatt.h"
 #include "uuid.h"
 #include "libglusterfs-messages.h"
 
@@ -68,6 +69,7 @@ void trap (void);
 
 #define GEOREP "geo-replication"
 #define GHADOOP "glusterfs-hadoop"
+#define GLUSTERD_NAME "glusterd"
 
 #define GF_SELINUX_XATTR_KEY "security.selinux"
 
@@ -77,6 +79,11 @@ void trap (void);
         (!strcmp (fs_name, "ext2") || \
          !strcmp (fs_name, "ext3") || \
          !strcmp (fs_name, "ext4"))
+
+/* process mode definitions */
+#define GF_SERVER_PROCESS   0
+#define GF_CLIENT_PROCESS   1
+#define GF_GLUSTERD_PROCESS 2
 
 /* Defining this here as it is needed by glusterd for setting
  * nfs port in volume status.
@@ -203,7 +210,7 @@ struct list_node *list_node_add_order (void *ptr, struct list_head *list,
 void list_node_del (struct list_node *node);
 
 struct dnscache *gf_dnscache_init (time_t ttl);
-struct dnscache_entry *gf_dnscache_entry_init ();
+struct dnscache_entry *gf_dnscache_entry_init (void);
 void gf_dnscache_entry_deinit (struct dnscache_entry *entry);
 char *gf_rev_dns_lookup_cached (const char *ip, struct dnscache *dnscache);
 
@@ -216,7 +223,7 @@ int32_t gf_resolve_ip6 (const char *hostname, uint16_t port, int family,
 
 void gf_log_dump_graph (FILE *specfp, glusterfs_graph_t *graph);
 void gf_print_trace (int32_t signal, glusterfs_ctx_t *ctx);
-int  gf_set_log_file_path (cmd_args_t *cmd_args);
+int  gf_set_log_file_path (cmd_args_t *cmd_args, glusterfs_ctx_t *ctx);
 int  gf_set_log_ident (cmd_args_t *cmd_args);
 
 #define VECTORSIZE(count) (count * (sizeof (struct iovec)))
@@ -750,11 +757,11 @@ int validate_brick_name (char *brick);
 char *get_host_name (char *word, char **host);
 char *get_path_name (char *word, char **path);
 void gf_path_strip_trailing_slashes (char *path);
-uint64_t get_mem_size ();
+uint64_t get_mem_size (void);
 int gf_strip_whitespace (char *str, int len);
 int gf_canonicalize_path (char *path);
 char *generate_glusterfs_ctx_id (void);
-char *gf_get_reserved_ports();
+char *gf_get_reserved_ports(void);
 int gf_process_reserved_ports (gf_boolean_t ports[], uint32_t ceiling);
 gf_boolean_t
 gf_ports_reserved (char *blocked_port, gf_boolean_t *ports, uint32_t ceiling);
@@ -766,6 +773,9 @@ int gf_set_timestamp  (const char *src, const char* dest);
 
 int gf_thread_create (pthread_t *thread, const pthread_attr_t *attr,
                       void *(*start_routine)(void *), void *arg);
+int gf_thread_create_detached (pthread_t *thread,
+                      void *(*start_routine)(void *), void *arg);
+
 gf_boolean_t
 gf_is_service_running (char *pidfile, int *pid);
 int
@@ -829,4 +839,6 @@ gf_zero_fill_stat (struct iatt *buf);
 gf_boolean_t
 is_virtual_xattr (const char *k);
 
+const char *
+gf_inode_type_to_str (ia_type_t type);
 #endif /* _COMMON_UTILS_H */

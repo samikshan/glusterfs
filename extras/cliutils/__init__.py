@@ -13,7 +13,6 @@ from cliutils import (runcli,
                       Cmd,
                       GlusterCmdException)
 
-from clitable import CliTable
 
 # This will be useful when `from cliutils import *`
 __all__ = ["runcli",
@@ -27,5 +26,4 @@ __all__ = ["runcli",
            "yesno",
            "get_node_uuid",
            "Cmd",
-           "CliTable",
            "GlusterCmdException"]

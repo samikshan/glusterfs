@@ -35,7 +35,7 @@ cli_cmd_global_help_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
 int cli_cmd_ganesha_cbk (struct cli_state *state, struct cli_cmd_word *word,
                                          const char **words, int wordcount);
 int
-cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word,
+cli_cmd_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word,
                               const char **words, int wordcount);
 
 struct cli_cmd global_cmds[] = {
@@ -47,9 +47,9 @@ struct cli_cmd global_cmds[] = {
            cli_cmd_ganesha_cbk,
           "Enable/disable NFS-Ganesha support",
         },
-        { "daemon get-state [<DAEMON>] odir </path/to/output/dir/>",
-          cli_cmd_daemon_get_state_cbk,
-          "Get state of daemon",
+        { "get-state [<DAEMON>] [odir </path/to/output/dir/>] [file <filename>]",
+          cli_cmd_get_state_cbk,
+          "Get state representation of mentioned daemon",
         },
         {NULL,  NULL,  NULL}
 };
@@ -140,8 +140,8 @@ out:
 }
 
 int
-cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word,
-                              const char **words, int wordcount)
+cli_cmd_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word,
+                       const char **words, int wordcount)
 {
         int                     sent        =   0;
         int                     parse_error =   0;
@@ -156,16 +156,16 @@ cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word
         if (!frame)
                 goto out;
 
-        ret = cli_cmd_daemon_get_state_parse (state, words, wordcount,
-                                              &options, &op_errstr);
+        ret = cli_cmd_get_state_parse (state, words, wordcount, &options,
+                                       &op_errstr);
 
         if (ret) {
                 if (op_errstr) {
-                    cli_err ("%s", op_errstr);
-                    cli_usage_out (word->pattern);
-                    GF_FREE (op_errstr);
+                        cli_err ("%s", op_errstr);
+                        cli_usage_out (word->pattern);
+                        GF_FREE (op_errstr);
                 } else
-                    cli_usage_out (word->pattern);
+                        cli_usage_out (word->pattern);
 
                 parse_error = 1;
                 goto out;
@@ -173,14 +173,14 @@ cli_cmd_daemon_get_state_cbk (struct cli_state *state, struct cli_cmd_word *word
 
         CLI_LOCAL_INIT (local, words, frame, options);
 
-        proc = &cli_rpc_prog->proctable[GLUSTER_CLI_DAEMON_GET_STATE];
+        proc = &cli_rpc_prog->proctable[GLUSTER_CLI_GET_STATE];
         if (proc->fn)
                 ret = proc->fn (frame, THIS, options);
 out:
         if (ret) {
                 cli_cmd_sent_status_get (&sent);
                 if ((sent == 0) && (parse_error == 0))
-                        cli_out ("Didn't get daemon state");
+                        cli_out ("Getting daemon state failed");
         }
 
         CLI_STACK_DESTROY (frame);

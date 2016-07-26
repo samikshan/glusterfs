@@ -3409,7 +3409,7 @@ out:
 
 /* Sets log file path from user provided arguments */
 int
-gf_set_log_file_path (cmd_args_t *cmd_args)
+gf_set_log_file_path (cmd_args_t *cmd_args, glusterfs_ctx_t *ctx)
 {
         int   i = 0;
         int   j = 0;
@@ -3435,6 +3435,16 @@ gf_set_log_file_path (cmd_args_t *cmd_args)
                                    tmp_str);
                 if (ret > 0)
                         ret = 0;
+                goto done;
+        }
+
+        if (ctx && GF_GLUSTERD_PROCESS == ctx->process_mode) {
+                ret = gf_asprintf (&cmd_args->log_file,
+                                   DEFAULT_LOG_FILE_DIRECTORY "/%s.log",
+                                   GLUSTERD_NAME);
+                if (ret > 0)
+                        ret = 0;
+
                 goto done;
         }
 
@@ -3550,6 +3560,36 @@ gf_thread_create (pthread_t *thread, const pthread_attr_t *attr,
         ret = pthread_create (thread, attr, start_routine, arg);
 
         pthread_sigmask (SIG_SETMASK, &old, NULL);
+
+        return ret;
+}
+
+int
+gf_thread_create_detached (pthread_t *thread,
+                         void *(*start_routine)(void *), void *arg)
+{
+        pthread_attr_t attr;
+        int ret = -1;
+
+        ret = pthread_attr_init (&attr);
+        if (ret) {
+                gf_msg (THIS->name, GF_LOG_ERROR, ret,
+                        LG_MSG_PTHREAD_ATTR_INIT_FAILED,
+                        "Thread attribute initialization failed");
+                return -1;
+        }
+
+        pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED);
+
+        ret = gf_thread_create (thread, &attr, start_routine, arg);
+        if (ret) {
+                gf_msg (THIS->name, GF_LOG_ERROR, ret,
+                        LG_MSG_PTHREAD_FAILED,
+                        "Thread creation failed");
+                ret = -1;
+        }
+
+        pthread_attr_destroy (&attr);
 
         return ret;
 }
@@ -4425,6 +4465,21 @@ fop_enum_to_string (glusterfs_fop_t fop)
                 return str_map[fop];
 
         return "UNKNOWNFOP";
+}
+
+const char *
+gf_inode_type_to_str (ia_type_t type)
+{
+        static const char *const str_ia_type[] = {
+                "UNKNOWN",
+                "REGULAR FILE",
+                "DIRECTORY",
+                "LINK",
+                "BLOCK DEVICE",
+                "CHARACTER DEVICE",
+                "PIPE",
+                "SOCKET"};
+        return str_ia_type[type];
 }
 
 gf_boolean_t

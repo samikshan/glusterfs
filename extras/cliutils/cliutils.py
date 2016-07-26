@@ -8,6 +8,7 @@ import xml.etree.cElementTree as etree
 import json
 import sys
 
+MY_UUID = None
 parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter,
                         description=__doc__)
 subparsers = parser.add_subparsers(dest="mode")
@@ -21,21 +22,14 @@ class GlusterCmdException(Exception):
     pass
 
 
-def cache_output(func):
-    # Decorator func can cache the output of any function. If a
-    # function is executed twice then returns cached output for
-    # second time.
-    def wrapper(*args, **kwargs):
-        global cache_data
-        if cache_data.get(func.func_name, None) is None:
-            cache_data[func.func_name] = func(*args, **kwargs)
-
-        return cache_data[func.func_name]
-    return wrapper
-
-
-@cache_output
 def get_node_uuid():
+    # Caches the Node UUID in global variable,
+    # Executes gluster system:: uuid get command only if
+    # calling this function for first time
+    global MY_UUID
+    if MY_UUID is not None:
+        return MY_UUID
+
     cmd = ["gluster", "system::", "uuid", "get", "--xml"]
     rc, out, err = execute(cmd)
 
@@ -44,7 +38,8 @@ def get_node_uuid():
 
     tree = etree.fromstring(out)
     uuid_el = tree.find("uuidGenerate/uuid")
-    return uuid_el.text
+    MY_UUID = uuid_el.text
+    return MY_UUID
 
 
 def yesno(flag):
@@ -83,6 +78,9 @@ def execute(cmd):
 def get_pool_list():
     cmd = ["gluster", "--mode=script", "pool", "list", "--xml"]
     rc, out, err = execute(cmd)
+    if rc != 0:
+        output_error("Failed to get Pool Info: {0}".format(err))
+
     tree = etree.fromstring(out)
 
     pool = []

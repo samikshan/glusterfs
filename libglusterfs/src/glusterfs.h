@@ -94,6 +94,7 @@
 #define GF_XATTR_GET_REAL_FILENAME_KEY "glusterfs.get_real_filename:"
 #define GF_XATTR_USER_PATHINFO_KEY   "glusterfs.pathinfo"
 #define GF_INTERNAL_IGNORE_DEEM_STATFS "ignore-deem-statfs"
+#define GF_XATTR_IOSTATS_DUMP_KEY "trusted.io-stats-dump"
 
 #define GF_READDIR_SKIP_DIRS       "readdir-filter-directories"
 #define GF_MDC_LOADED_KEY_NAMES     "glusterfs.mdc.loaded.key.names"
@@ -181,6 +182,8 @@
 #define GF_XATTROP_DIRTY_COUNT "glusterfs.xattrop_dirty_count"
 #define GF_XATTROP_ENTRY_IN_KEY "glusterfs.xattrop-entry-create"
 #define GF_XATTROP_ENTRY_OUT_KEY "glusterfs.xattrop-entry-delete"
+#define GF_INDEX_IA_TYPE_GET_REQ "glusterfs.index-ia-type-get-req"
+#define GF_INDEX_IA_TYPE_GET_RSP "glusterfs.index-ia-type-get-rsp"
 
 #define GF_HEAL_INFO "glusterfs.heal-info"
 #define GF_AFR_HEAL_SBRAIN "glusterfs.heal-sbrain"
@@ -556,7 +559,7 @@ int glusterfs_graph_destroy (glusterfs_graph_t *graph);
 int glusterfs_get_leaf_count (glusterfs_graph_t *graph);
 int glusterfs_graph_activate (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx);
 glusterfs_graph_t *glusterfs_graph_construct (FILE *fp);
-glusterfs_graph_t *glusterfs_graph_new ();
+glusterfs_graph_t *glusterfs_graph_new (void);
 int glusterfs_graph_reconfigure (glusterfs_graph_t *oldgraph,
                                   glusterfs_graph_t *newgraph);
 
