@@ -2210,6 +2210,70 @@ out:
         return ret;
 }
 
+int
+gf_cli_get_max_opversion_cbk (struct rpc_req *req, struct iovec *iov,
+                              int count, void *myframe)
+{
+        gf_cli_rsp           rsp            = {0,};
+        int                  ret            = -1;
+        dict_t               *dict          = NULL;
+        int                  max_opversion  = -1;
+
+        GF_VALIDATE_OR_GOTO ("cli", myframe, out);
+
+        if (-1 == req->rpc_status) {
+                goto out;
+        }
+        ret = xdr_to_generic (*iov, &rsp, (xdrproc_t)xdr_gf_cli_rsp);
+        if (ret < 0) {
+                gf_log (((call_frame_t *) myframe)->this->name, GF_LOG_ERROR,
+                        "Failed to decode xdr response");
+                goto out;
+        }
+
+        dict = dict_new ();
+
+        if (!dict) {
+                ret = -1;
+                goto out;
+        }
+
+        ret = dict_unserialize (rsp.dict.dict_val, rsp.dict.dict_len, &dict);
+        if (ret)
+                goto out;
+
+        if (rsp.op_ret) {
+                if (strcmp (rsp.op_errstr, ""))
+                        cli_err ("Failed to get maximum "
+                                 "supported op-version: %s", rsp.op_errstr);
+                else
+                        cli_err ("Failed to get maximum supported op-version."
+                                 "Check glusterd log file for more details");
+        } else {
+                ret = dict_get_int32 (dict, "max-opversion", &max_opversion);
+                if (ret) {
+                        gf_log ("cli", GF_LOG_ERROR,
+                                "Couldn't get maximum supported op-version");
+                        goto out;
+                }
+
+                cli_out ("Maximum supported op-version: %d", max_opversion);
+        }
+
+        ret = rsp.op_ret;
+
+out:
+        free (rsp.dict.dict_val);
+        free (rsp.op_errstr);
+
+        if (dict)
+                dict_unref (dict);
+
+        cli_cmd_broadcast_response (ret);
+
+        return ret;
+}
+
 char *
 is_server_debug_xlator (void *myframe)
 {
@@ -4723,6 +4787,30 @@ gf_cli_ganesha (call_frame_t *frame, xlator_t *this, void *data)
                                (xdrproc_t) xdr_gf_cli_req, dict,
                                GLUSTER_CLI_GANESHA, this, cli_rpc_prog,
                                NULL);
+out:
+        gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);
+
+        return ret;
+}
+
+int32_t
+gf_cli_get_max_opversion (call_frame_t *frame, xlator_t *this, void *data)
+{
+        gf_cli_req              req =  { {0,} } ;
+        int                     ret = 0;
+        dict_t                  *dict = NULL;
+
+        if (!frame || !this || !data) {
+                ret = -1;
+                goto out;
+        }
+
+        dict = data;
+
+        ret = cli_to_glusterd (&req, frame, gf_cli_get_max_opversion_cbk,
+                               (xdrproc_t) xdr_gf_cli_req, dict,
+                               GLUSTER_CLI_MAX_OPVERSION,
+                               this, cli_rpc_prog, NULL);
 out:
         gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);
 
@@ -11546,6 +11634,7 @@ struct rpc_clnt_procedure gluster_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_SNAP]             = {"SNAP", gf_cli_snapshot},
         [GLUSTER_CLI_BARRIER_VOLUME]   = {"BARRIER VOLUME", gf_cli_barrier_volume},
         [GLUSTER_CLI_GANESHA]          = {"GANESHA", gf_cli_ganesha},
+        [GLUSTER_CLI_MAX_OPVERSION]    = {"MAX_OPVERSION", gf_cli_get_max_opversion},
         [GLUSTER_CLI_GET_VOL_OPT]      = {"GET_VOL_OPT", gf_cli_get_vol_opt},
         [GLUSTER_CLI_BITROT]           = {"BITROT", gf_cli_bitrot},
         [GLUSTER_CLI_ATTACH_TIER]      = {"ATTACH_TIER", gf_cli_attach_tier},

@@ -175,7 +175,7 @@ struct cli_volume_status {
         char          *device;
         char          *inode_size;
 #endif
-};
+;};
 
 struct snap_config_opt_vals_ {
         char           *op_name;
@@ -262,6 +262,10 @@ cli_cmd_ganesha_parse (struct cli_state *state, const char **words,
 int32_t
 cli_cmd_get_state_parse (struct cli_state *state, const char **words,
                          int wordcount, dict_t **options, char **op_errstr);
+int32_t
+cli_cmd_get_max_opversion_parse (struct cli_state *state,
+                                 const char **words, int wordcount,
+                                 dict_t **options, char **op_errstr);
 
 int32_t
 cli_cmd_volume_add_brick_parse (const char **words, int wordcount,

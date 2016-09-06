@@ -1092,6 +1092,53 @@ out:
 }
 
 int32_t
+cli_cmd_get_max_opversion_parse (struct cli_state *state,
+                                 const char **words, int wordcount,
+                                 dict_t **options, char **op_errstr)
+{
+        dict_t  *dict     =       NULL;
+        int     ret       =       -1;
+
+        GF_VALIDATE_OR_GOTO ("cli", words, out);
+        GF_VALIDATE_OR_GOTO ("cli", options, out);
+
+        dict = dict_new ();
+
+        if (!dict)
+                goto out;
+
+        if (wordcount != 1)
+                goto out;
+
+        ret = dict_set_str (dict, "globalname", "All");
+        if (ret) {
+                gf_log (THIS->name, GF_LOG_ERROR, "dict set on global"
+                        " key failed.");
+                goto out;
+        }
+
+        ret = dict_set_int32 (dict, "hold_global_locks", _gf_true);
+        if (ret) {
+                gf_log (THIS->name, GF_LOG_ERROR, "dict set on global key "
+                        "failed.");
+                goto out;
+        }
+
+        ret = 0;
+out:
+        if (dict)
+                *options = dict;
+
+        if (ret && dict)
+                dict_unref (dict);
+
+        return ret;
+}
+
+
+
+
+int32_t
 cli_cmd_quota_parse (const char **words, int wordcount, dict_t **options)
 {
         dict_t          *dict    = NULL;

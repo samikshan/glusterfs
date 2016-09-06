@@ -452,6 +452,9 @@ int
 glusterd_volume_bitrot_scrub_use_rsp_dict (dict_t *aggr, dict_t *rsp_dict);
 
 int
+glusterd_max_opversion_use_rsp_dict (dict_t *dst, dict_t *src);
+
+int
 glusterd_volume_heal_use_rsp_dict (dict_t *aggr, dict_t *rsp_dict);
 
 int32_t

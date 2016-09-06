@@ -120,6 +120,7 @@ typedef enum glusterd_op_ {
         GD_OP_SCRUB_STATUS,
         GD_OP_SCRUB_ONDEMAND,
         GD_OP_RESET_BRICK,
+        GD_OP_MAX_OPVERSION,
         GD_OP_MAX,
 } glusterd_op_t;
 

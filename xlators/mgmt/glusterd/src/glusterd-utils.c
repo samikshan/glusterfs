@@ -8671,6 +8671,44 @@ out:
 }
 
 int
+glusterd_max_opversion_use_rsp_dict (dict_t *dst, dict_t *src)
+{
+        int ret = -1;
+        int src_max_opversion = -1;
+        int max_opversion = -1;
+
+        GF_VALIDATE_OR_GOTO (THIS->name, dst, out);
+        GF_VALIDATE_OR_GOTO (THIS->name, src, out);
+
+        ret = dict_get_int32 (dst, "max-opversion", &max_opversion);
+        if (ret)
+                gf_msg (THIS->name, GF_LOG_ERROR, 0, GD_MSG_DICT_GET_FAILED,
+                        "Maximum supported op-version not set in destination "
+                        "dictionary");
+
+        ret = dict_get_int32 (src, "max-opversion", &src_max_opversion);
+        if (ret) {
+                gf_msg (THIS->name, GF_LOG_ERROR, 0, GD_MSG_DICT_GET_FAILED,
+                        "Failed to get maximum supported op-version from source");
+                goto out;
+        }
+
+        if (max_opversion == -1 || src_max_opversion < max_opversion)
+                max_opversion = src_max_opversion;
+
+        ret = dict_set_int32 (dst, "max-opversion", max_opversion);
+        if (ret) {
+                gf_msg (THIS->name, GF_LOG_ERROR, 0, GD_MSG_DICT_SET_FAILED,
+                        "Failed to set max op-version");
+                goto out;
+        }
+
+out:
+        return ret;
+}
+
+
+int
 glusterd_volume_bitrot_scrub_use_rsp_dict (dict_t *aggr, dict_t *rsp_dict)
 {
         int                      ret                = -1;

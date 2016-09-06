@@ -1768,6 +1768,22 @@ glusterd_op_stage_status_volume (dict_t *dict, char **op_errstr)
         return ret;
 }
 
+static int
+glusterd_op_stage_get_max_opversion (dict_t *dict, char **op_errstr)
+{
+        int                    ret            = -1;
+
+        GF_VALIDATE_OR_GOTO (THIS->name, dict, out);
+
+        ret = 0;
+out:
+        if (ret)
+                *op_errstr = gf_strdup ("Validation Failed for "
+                                        "maximum supported op-version");
+
+        gf_msg_debug (THIS->name, 0, "Returning: %d", ret);
+        return ret;
+}
 
 static gf_boolean_t
 glusterd_is_profile_on (glusterd_volinfo_t *volinfo)
@@ -3441,6 +3457,34 @@ out:
 }
 
 static int
+glusterd_op_get_max_opversion (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
+{
+        int                     ret             = -1;
+        int                     node_count      = 0;
+        uint32_t                cmd             = 0;
+        xlator_t               *this            = NULL;
+        glusterd_conf_t        *priv            = NULL;
+
+        this = THIS;
+        GF_VALIDATE_OR_GOTO (THIS->name, this, out);
+
+        priv = this->private;
+        GF_VALIDATE_OR_GOTO (this->name, priv, out);
+
+        GF_VALIDATE_OR_GOTO (this->name, dict, out);
+        GF_VALIDATE_OR_GOTO (this->name, rsp_dict, out);
+
+        ret = dict_set_int32 (rsp_dict, "max-opversion", GD_OP_VERSION_MAX);
+        if (ret)
+                goto out;
+
+out:
+        gf_msg_debug (THIS->name, 0, "Returning %d", ret);
+
+        return ret;
+}
+
+static int
 glusterd_op_ac_none (glusterd_op_sm_event_t *event, void *ctx)
 {
         int ret = 0;
@@ -4163,6 +4207,7 @@ glusterd_op_build_payload (dict_t **req, char **op_errstr, dict_t *op_ctx)
                         break;
 
                 case GD_OP_GANESHA:
+                case GD_OP_MAX_OPVERSION:
                         {
                                 dict_copy (dict, req_dict);
                         }
@@ -5597,7 +5642,6 @@ glusterd_op_sm_transition_state (glusterd_op_info_t *opinfo,
                                  glusterd_op_sm_event_type_t event_type)
 {
         glusterd_conf_t         *conf = NULL;
-
         GF_ASSERT (state);
         GF_ASSERT (opinfo);
 
@@ -5729,7 +5773,10 @@ glusterd_op_stage_validate (glusterd_op_t op, dict_t *dict, char **op_errstr,
                         ret = glusterd_op_stage_bitrot (dict, op_errstr,
                                                         rsp_dict);
                         break;
-
+                case GD_OP_MAX_OPVERSION:
+                        ret = glusterd_op_stage_get_max_opversion (dict,
+                                                                   op_errstr);
+                        break;
                 default:
                         gf_msg (this->name, GF_LOG_ERROR, 0,
                                 GD_MSG_INVALID_ENTRY, "Unknown op %s",
@@ -5853,6 +5900,10 @@ glusterd_op_commit_perform (glusterd_op_t op, dict_t *dict, char **op_errstr,
                 case GD_OP_SCRUB_STATUS:
                 case GD_OP_SCRUB_ONDEMAND:
                         ret = glusterd_op_bitrot (dict, op_errstr, rsp_dict);
+                        break;
+
+                case GD_OP_MAX_OPVERSION:
+                        ret = glusterd_op_get_max_opversion (dict, op_errstr, rsp_dict);
                         break;
 
                 default:
@@ -7880,6 +7931,7 @@ glusterd_op_free_ctx (glusterd_op_t op, void *ctx)
                 case GD_OP_STATEDUMP_VOLUME:
                 case GD_OP_CLEARLOCKS_VOLUME:
                 case GD_OP_DEFRAG_BRICK_VOLUME:
+                case GD_OP_MAX_OPVERSION:
                         dict_unref (ctx);
                         break;
                 default:
