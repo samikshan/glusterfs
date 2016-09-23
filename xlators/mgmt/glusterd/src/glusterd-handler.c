@@ -4655,6 +4655,12 @@ glusterd_get_volume_opts (rpcsvc_request_t *req, dict_t *dict)
                 goto out;
         }
 
+        if (strcasecmp (volname, "all") == 0) {
+                ret = glusterd_get_global_options_for_all_vols (dict,
+                                                                &rsp.op_errstr);
+                goto out;
+        }
+
         ret = dict_get_str (dict, "key", &key);
         if (ret) {
                 snprintf (err_str, sizeof (err_str), "Failed to get key "
@@ -4666,6 +4672,7 @@ glusterd_get_volume_opts (rpcsvc_request_t *req, dict_t *dict)
         gf_msg_debug (this->name, 0, "Received get volume opt request for "
                 "volume %s", volname);
 
+
         ret = glusterd_volinfo_find (volname, &volinfo);
         if (ret) {
                 snprintf (err_str, sizeof(err_str),
@@ -4675,6 +4682,7 @@ glusterd_get_volume_opts (rpcsvc_request_t *req, dict_t *dict)
                         volname);
                 goto out;
         }
+
         if (strcmp(key, "all")) {
                 if (fnmatch (GD_HOOKS_SPECIFIC_KEY, key, FNM_NOESCAPE) == 0) {
                         sprintf (dict_key, "key%d", count);
@@ -4813,6 +4821,7 @@ glusterd_get_volume_opts (rpcsvc_request_t *req, dict_t *dict)
                                 }
                                 sprintf (dict_key, "value%d", count);
                                 ret = dict_get_str (priv->opts, key, &value);
+
                                 if (!ret) {
                                         ret = dict_set_str(dict, dict_key,
                                                            value);

@@ -624,6 +624,9 @@ int
 glusterd_get_volopt_content (dict_t *dict, gf_boolean_t xml_out);
 
 int
+glusterd_get_global_options_for_all_vols (dict_t *dict, char **op_errstr);
+
+int
 glusterd_get_default_val_for_volopt (dict_t *dict, gf_boolean_t all_opts,
                                      char *key, char *orig_key,
                                      dict_t *vol_dict, char **err_str);

@@ -27,6 +27,39 @@
 #define GD_OP_PROTECTED    (0x02)
 #define GD_OP_UNPROTECTED  (0x04)
 
+#define ALL_VOLUME_OPTION_CHECK(volname, get_opt, key, ret, op_errstr, label)  \
+        do {                                                                   \
+                gf_boolean_t    _all   = !strcmp ("all", volname);             \
+                gf_boolean_t    _is_valid_opt = _gf_false;                     \
+                int32_t         i      = 0;                                    \
+                                                                               \
+                if (strcmp (key, "all") == 0 && !get_opt) {                    \
+                        ret = -1;                                              \
+                        *op_errstr = gf_strdup ("Not a valid option to set");  \
+                }                                                              \
+                                                                               \
+                for (i = 0; valid_all_vol_opts[i].option; i++) {               \
+                        if (!strcmp (key, "all") ||                            \
+                            !strcmp (key, valid_all_vol_opts[i].option)) {     \
+                                _is_valid_opt = _gf_true;                      \
+                                break;                                         \
+                        }                                                      \
+                }                                                              \
+                                                                               \
+                if (_all && !_is_valid_opt) {                                  \
+                        ret = -1;                                              \
+                        *op_errstr = gf_strdup ("Not a valid option for all "  \
+                                                "volumes");                    \
+                        goto label;                                            \
+                } else if (!_all && _is_valid_opt) {                           \
+                        ret = -1;                                              \
+                        *op_errstr = gf_strdup ("Not a valid option for "      \
+                                                "single volume");              \
+                        goto label;                                            \
+                }                                                              \
+         } while (0)                                                           \
+
+
 typedef enum glusterd_op_sm_state_ {
         GD_OP_STATE_DEFAULT = 0,
         GD_OP_STATE_LOCK_SENT,
