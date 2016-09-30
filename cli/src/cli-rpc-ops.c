@@ -11409,8 +11409,8 @@ gf_cli_get_vol_opt_cbk (struct rpc_req *req, struct iovec *iov, int count,
                 ret = dict_get_str (dict, dict_key, &value);
                 if (ret) {
                         gf_log ("cli", GF_LOG_ERROR, "Failed to "
-                                "retrieve key value for %s from"
-                                "the dictionary", dict_key);
+                                "retrieve key value for %s from "
+                                "the dictionary", key);
                         goto out;
                 }
                 cli_out ("%-40s%-40s", key, value);
