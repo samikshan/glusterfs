@@ -557,7 +557,7 @@ glusterd_brick_op_build_payload (glusterd_op_t op, glusterd_brickinfo_t *brickin
                 if (!brick_req)
                         goto out;
                 brick_req->op = GLUSTERD_BRICK_TERMINATE;
-                brick_req->name = "";
+                brick_req->name = brickinfo->path;
                 glusterd_set_brick_status (brickinfo, GF_BRICK_STOPPING);
                 break;
         case GD_OP_PROFILE_VOLUME:
@@ -618,28 +618,13 @@ glusterd_brick_op_build_payload (glusterd_op_t op, glusterd_brickinfo_t *brickin
 
                 break;
         case GD_OP_SNAP:
-                brick_req = GF_CALLOC (1, sizeof (*brick_req),
-                                       gf_gld_mt_mop_brick_req_t);
-                if (!brick_req)
-                        goto out;
-
-                brick_req->op = GLUSTERD_BRICK_BARRIER;
-                ret = dict_get_str (dict, "volname", &volname);
-                if (ret)
-                        goto out;
-                brick_req->name = gf_strdup (volname);
-
-                break;
         case GD_OP_BARRIER:
                 brick_req = GF_CALLOC (1, sizeof(*brick_req),
                                        gf_gld_mt_mop_brick_req_t);
                 if (!brick_req)
                         goto out;
                 brick_req->op = GLUSTERD_BRICK_BARRIER;
-                ret = dict_get_str(dict, "volname", &volname);
-                if (ret)
-                        goto out;
-                brick_req->name = gf_strdup (volname);
+                brick_req->name = brickinfo->path;
                 break;
 
         default:
@@ -6063,6 +6048,8 @@ glusterd_bricks_select_stop_volume (dict_t *dict, char **op_errstr,
         glusterd_volinfo_t                      *volinfo = NULL;
         glusterd_brickinfo_t                    *brickinfo = NULL;
         glusterd_pending_node_t                 *pending_node = NULL;
+        glusterd_conf_t                         *conf = THIS->private;
+        char                                    pidfile[1024];
 
         ret = glusterd_op_stop_volume_args_get (dict, &volname, &flags);
         if (ret)
@@ -6091,6 +6078,18 @@ glusterd_bricks_select_stop_volume (dict_t *dict, char **op_errstr,
                                                    selected);
                                 pending_node = NULL;
                         }
+                        /*
+                         * This is not really the right place to do it, but
+                         * it's the most convenient.
+                         * TBD: move this to *after* the RPC
+                         */
+                        brickinfo->status = GF_BRICK_STOPPED;
+                        brickinfo->started_here = _gf_false;
+                        GLUSTERD_GET_BRICK_PIDFILE (pidfile, volinfo,
+                                                    brickinfo, conf);
+                        gf_log (THIS->name, GF_LOG_INFO,
+                                "unlinking pidfile %s", pidfile);
+                        (void) sys_unlink (pidfile);
                 }
         }
 
@@ -6113,7 +6112,8 @@ glusterd_bricks_select_remove_brick (dict_t *dict, char **op_errstr,
         glusterd_pending_node_t                 *pending_node = NULL;
         int32_t                                 command = 0;
         int32_t                                 force = 0;
-
+        glusterd_conf_t                         *conf = THIS->private;
+        char                                    pidfile[1024];
 
         ret = dict_get_str (dict, "volname", &volname);
 
@@ -6187,6 +6187,18 @@ glusterd_bricks_select_remove_brick (dict_t *dict, char **op_errstr,
                                                    selected);
                                 pending_node = NULL;
                         }
+                        /*
+                         * This is not really the right place to do it, but
+                         * it's the most convenient.
+                         * TBD: move this to *after* the RPC
+                         */
+                        brickinfo->status = GF_BRICK_STOPPED;
+                        brickinfo->started_here = _gf_false;
+                        GLUSTERD_GET_BRICK_PIDFILE (pidfile, volinfo,
+                                                    brickinfo, conf);
+                        gf_log (THIS->name, GF_LOG_INFO,
+                                "unlinking pidfile %s", pidfile);
+                        (void) sys_unlink (pidfile);
                 }
                 i++;
         }

@@ -2612,7 +2612,7 @@ glusterd_op_start_volume (dict_t *dict, char **op_errstr)
         }
 
         ret = dict_get_str (conf->opts, GLUSTERD_STORE_KEY_GANESHA_GLOBAL, &str);
-        if (ret == -1) {
+        if (ret != 0) {
                 gf_msg (this->name, GF_LOG_INFO, 0,
                         GD_MSG_DICT_GET_FAILED, "Global dict not present.");
                 ret = 0;

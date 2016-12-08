@@ -178,7 +178,7 @@ out:
         return ret;
 }
 
-static size_t
+size_t
 build_volfile_path (char *volume_id, char *path,
                     size_t path_len, char *trusted_str)
 {

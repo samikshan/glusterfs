@@ -1,0 +1,22 @@
+#!/bin/bash
+
+run_one () {
+	find /var/log/glusterfs -type f | xargs rm -f
+	setup_begin=$(date +%s)
+	./mpxsetup $* &> /dev/null
+	setup_end=$(date +%s)
+	echo "setup took $((setup_end-setup_begin)) seconds"
+	time ./loadtest 0 $i
+	./mpxcleanup &> /dev/null
+	./mpxcleanup &> /dev/null
+}
+
+i=0
+while true; do
+	i=$((i+10))
+	echo "TESTING WITH $i VOLUMES ($((i*4)) bricks)"
+	echo "--- NORMAL"
+	run_one $i
+	echo "--- MULTIPLEXING"
+	run_one -m $i
+done

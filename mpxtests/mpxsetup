@@ -1,0 +1,61 @@
+#!/bin/bash
+
+first_vol=0
+nvols=20
+base_vol_name=mpx
+brick_root=/d/backends
+mount_root=/mnt/glusterfs
+me=$(hostname)
+
+while getopts "mrs:" opt; do
+	case $opt in
+	'm')
+		export MULTIPLEX="yes"
+		;;
+	'r')
+		ramdisks="yes"
+		;;
+	's')
+		first_vol=$OPTARG
+		;;
+	*)
+		break
+		;;
+	esac
+done
+if [ $OPTIND -le $# ]; then
+	nvols=${!OPTIND}
+fi
+
+#ECHO=echo
+
+setup_ramdisk () {
+	disk_name=/tmp/${vol_name}.disk
+	$ECHO truncate --size $((1024*1024*100)) $disk_name
+	$ECHO mkfs.xfs -i size=512 $disk_name
+	$ECHO mount -o loop $disk_name $brick_root/$vol_name
+}
+
+if [ $first_vol = 0 ]; then
+	glusterd
+fi
+
+i=0
+while [ $i -lt $nvols ]; do
+	vol_name=$(printf %s%02d $base_vol_name $((first_vol+i)))
+	$ECHO mkdir -p $brick_root/$vol_name
+	if [ -n "$ramdisks" ]; then
+		setup_ramdisk $vol_name
+	fi
+	cmd="gluster volume create $vol_name replica 2"
+	for j in a b c d; do
+		brick_name=$brick_root/$vol_name/$j
+		$ECHO mkdir -p $brick_name
+		cmd="$cmd $me:$brick_name"
+	done
+	$ECHO $cmd force
+	$ECHO gluster volume start $vol_name
+	$ECHO mkdir -p $mount_root/$vol_name
+	$ECHO mount -t glusterfs $me:$vol_name $mount_root/$vol_name
+	i=$((i+1))
+done

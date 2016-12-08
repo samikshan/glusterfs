@@ -1,0 +1,30 @@
+#!/bin/bash -x
+
+while getopts "r" opt; do
+	case $opt in
+	'r')
+		ramdisks="yes"
+		;;
+	*)
+		break
+		;;
+	esac
+done
+
+umount -f /mnt/glusterfs/mpx*
+
+killall glusterfs
+killall glusterfsd
+killall glusterd
+
+cleanup_ramdisks () {
+	umount -f /d/backends/mpx*
+	rm -f /tmp/mpx*.disk
+}
+
+rm -rf /mnt/glusterfs/mpx*
+if [ -n "$ramdisks" ]; then
+	cleanup_ramdisks
+fi
+rm -rf /d/backends/mpx*
+rm -rf /var/lib/glusterd/vols/*

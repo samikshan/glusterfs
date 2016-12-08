@@ -19,6 +19,14 @@ function create_dist_tier_vol () {
         TEST $CLI_1 volume attach-tier $V0 $H1:$B1/${V0}_h1 $H2:$B2/${V0}_h2 $H3:$B3/${V0}_h3
 }
 
+function tier_daemon_status {
+        local _VAR=CLI_$1
+	echo $_VAR > /dev/tty
+        local x=$(${!_VAR} volume status $V0 | grep 'Tier Daemon on localhost')
+        echo $x > /dev/tty
+        echo $x | awk '{print $7}'
+}
+
 cleanup;
 
 #setup cluster and test volume
@@ -54,6 +62,10 @@ EXPECT_WITHIN $PROCESS_UP_TIMEOUT "1" tier_status_node_down
 TEST $glusterd_2;
 
 EXPECT_WITHIN $PROBE_TIMEOUT 2 check_peers;
+# Make sure we check that the *bricks* are up and not just the node.  >:-(
+EXPECT_WITHIN $CHILD_UP_TIMEOUT 1 brick_up_status_1 $V0 $H2 $B2/${V0}
+EXPECT_WITHIN $CHILD_UP_TIMEOUT 1 brick_up_status_1 $V0 $H2 $B2/${V0}_h2
+EXPECT_WITHIN $PROCESS_UP_TIMEOUT Y tier_daemon_status 2
 
 EXPECT_WITHIN $PROCESS_UP_TIMEOUT "1" tier_detach_status
 

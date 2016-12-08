@@ -886,19 +886,6 @@ glusterd_snapshot_restore (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
                         goto out;
                 }
 
-                /* Restore is successful therefore delete the original volume's
-                 * volinfo. If the volinfo is already restored then we should
-                 * delete the backend LVMs */
-                if (!gf_uuid_is_null (parent_volinfo->restored_from_snap)) {
-                        ret = glusterd_lvm_snapshot_remove (rsp_dict,
-                                                            parent_volinfo);
-                        if (ret) {
-                                gf_msg (this->name, GF_LOG_ERROR, 0,
-                                        GD_MSG_LVM_REMOVE_FAILED,
-                                        "Failed to remove LVM backend");
-                        }
-                }
-
                 /* Detach the volinfo from priv->volumes, so that no new
                  * command can ref it any more and then unref it.
                  */
@@ -2895,7 +2882,14 @@ glusterd_do_lvm_snapshot_remove (glusterd_volinfo_t *snap_vol,
                         "path %s (brick: %s): %s. Retry(%d)", mount_pt,
                         brickinfo->path, strerror (errno), retry_count);
 
-                sleep (1);
+                /*
+                 * This used to be one second, but that wasn't long enough
+                 * to get past the spurious EPERM errors that prevent some
+                 * tests (especially bug-1162462.t) from passing reliably.
+                 *
+                 * TBD: figure out where that garbage is coming from
+                 */
+                sleep (3);
         }
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, 0,
@@ -7599,20 +7593,21 @@ glusterd_get_single_brick_status (char **op_errstr, dict_t *rsp_dict,
 
                 GLUSTERD_GET_BRICK_PIDFILE (pidfile, snap_volinfo,
                                             brickinfo, priv);
-                ret = gf_is_service_running (pidfile, &pid);
 
-                ret = snprintf (key, sizeof (key), "%s.brick%d.pid",
-                                keyprefix, index);
-                if (ret < 0) {
-                        goto out;
-                }
+                if (gf_is_service_running (pidfile, &pid)) {
+                        ret = snprintf (key, sizeof (key), "%s.brick%d.pid",
+                                        keyprefix, index);
+                        if (ret < 0) {
+                                goto out;
+                        }
 
-                ret = dict_set_int32 (rsp_dict, key, pid);
-                if (ret) {
-                        gf_msg (this->name, GF_LOG_ERROR, 0,
-                                GD_MSG_DICT_SET_FAILED,
-                                "Could not save pid %d", pid);
-                        goto out;
+                        ret = dict_set_int32 (rsp_dict, key, pid);
+                        if (ret) {
+                                gf_msg (this->name, GF_LOG_ERROR, 0,
+                                        GD_MSG_DICT_SET_FAILED,
+                                        "Could not save pid %d", pid);
+                                goto out;
+                        }
                 }
         }
 

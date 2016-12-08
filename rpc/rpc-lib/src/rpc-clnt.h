@@ -28,7 +28,6 @@ typedef enum {
 #define SFRAME_GET_PROGVER(sframe) (sframe->rpcreq->prog->progver)
 #define SFRAME_GET_PROCNUM(sframe) (sframe->rpcreq->procnum)
 
-struct xptr_clnt;
 struct rpc_req;
 struct rpc_clnt;
 struct rpc_clnt_config;
@@ -172,7 +171,6 @@ struct rpc_req {
 
 typedef struct rpc_clnt {
         pthread_mutex_t        lock;
-        pthread_mutex_t        notifylock;
         rpc_clnt_notify_t      notifyfn;
         rpc_clnt_connection_t  conn;
         void                  *mydata;
