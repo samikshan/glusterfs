@@ -46,6 +46,7 @@
 #include "glusterd-pmap.h"
 #include "glusterfs-acl.h"
 #include "glusterd-syncop.h"
+#include "glusterd-mgmt.h"
 #include "glusterd-locks.h"
 #include "glusterd-messages.h"
 #include "glusterd-volgen.h"
@@ -8667,6 +8668,43 @@ out:
 }
 
 int
+glusterd_max_opversion_use_rsp_dict (dict_t *dst, dict_t *src)
+{
+        int ret = -1;
+        int src_max_opversion = -1;
+        int max_opversion = -1;
+
+        GF_VALIDATE_OR_GOTO (THIS->name, dst, out);
+        GF_VALIDATE_OR_GOTO (THIS->name, src, out);
+
+        ret = dict_get_int32 (dst, "max-opversion", &max_opversion);
+        if (ret)
+                gf_msg (THIS->name, GF_LOG_ERROR, 0, GD_MSG_DICT_GET_FAILED,
+                                "Maximum supported op-version not set in destination "
+                                "dictionary");
+
+        ret = dict_get_int32 (src, "max-opversion", &src_max_opversion);
+        if (ret) {
+                gf_msg (THIS->name, GF_LOG_ERROR, 0, GD_MSG_DICT_GET_FAILED,
+                        "Failed to get maximum supported op-version from source");
+                goto out;
+        }
+
+        if (max_opversion == -1 || src_max_opversion < max_opversion)
+                max_opversion = src_max_opversion;
+
+        ret = dict_set_int32 (dst, "max-opversion", max_opversion);
+        if (ret) {
+                gf_msg (THIS->name, GF_LOG_ERROR, 0, GD_MSG_DICT_SET_FAILED,
+                                "Failed to set max op-version");
+                goto out;
+        }
+out:
+        return ret;
+}
+
+
+int
 glusterd_volume_bitrot_scrub_use_rsp_dict (dict_t *aggr, dict_t *rsp_dict)
 {
         int                      ret                = -1;
@@ -10910,7 +10948,8 @@ out:
 }
 
 int
-glusterd_get_global_options_for_all_vols (dict_t *ctx, char **op_errstr)
+glusterd_get_global_options_for_all_vols (rpcsvc_request_t *req, dict_t *ctx,
+                                          char **op_errstr)
 {
         int                     ret = -1;
         int                     count = 0;
@@ -10948,16 +10987,20 @@ glusterd_get_global_options_for_all_vols (dict_t *ctx, char **op_errstr)
         else {
                 exists = glusterd_check_option_exists (key, &key_fixed);
                 if (!exists) {
-                        snprintf (err_str, sizeof (err_str), "Option "
-                                  "with name: %s does not exist", key);
-                        gf_msg (this->name, GF_LOG_ERROR, EINVAL,
-                                GD_MSG_UNKNOWN_KEY, "%s", err_str);
-                        if (key_fixed)
-                                snprintf (err_str + ret,
-                                          sizeof (err_str) - ret,
-                                          "Did you mean %s?", key_fixed);
-                        ret = -1;
-                        goto out;
+                        if (strcmp (key, GLUSTERD_MAX_OP_VERSION_KEY) != 0) {
+                                snprintf (err_str, sizeof (err_str), "Option "
+                                          "with name: %s does not exist", key);
+                                gf_msg (this->name, GF_LOG_ERROR, EINVAL,
+                                        GD_MSG_UNKNOWN_KEY, "%s", err_str);
+                                if (key_fixed)
+                                        snprintf (err_str + ret,
+                                                  sizeof (err_str) - ret,
+                                                  "Did you mean %s?", key_fixed);
+                                ret = -1;
+                                goto out;
+                        } else {
+                                key_fixed = NULL;
+                        }
                 }
                 if (key_fixed)
                         key = key_fixed;
@@ -10970,6 +11013,55 @@ glusterd_get_global_options_for_all_vols (dict_t *ctx, char **op_errstr)
 
                 if (!all_opts && strcmp (key, allvolopt) != 0)
                         continue;
+
+                /* Found global option */
+
+                if (strcmp (allvolopt, GLUSTERD_MAX_OP_VERSION_KEY) == 0
+                                                                && !all_opts) {
+                        ret = glusterd_mgmt_v3_initiate_all_phases (req,
+                                                    GD_OP_MAX_OPVERSION, ctx);
+
+                        count = 1;
+
+                        ret = dict_get_str (ctx, "max-opversion", &def_val);
+                        if (ret) {
+                                gf_msg (this->name, GF_LOG_ERROR, 0,
+                                        GD_MSG_DICT_GET_FAILED,
+                                        "Failed to get max-opversion value from"
+                                        " dictionary");
+                                goto out;
+                        }
+
+                        sprintf (dict_key, "key%d", count);
+                        ret = dict_set_str (ctx, dict_key, allvolopt);
+                        if (ret) {
+                                gf_msg (this->name, GF_LOG_ERROR, 0,
+                                        GD_MSG_DICT_SET_FAILED,
+                                        "Failed to set %s in dictionary", allvolopt);
+                                goto out;
+                        }
+
+                        sprintf (dict_key, "value%d", count);
+                        ret = dict_set_dynstr_with_alloc (ctx, dict_key, def_val);
+                        if (ret) {
+                                gf_msg (this->name, GF_LOG_ERROR, 0,
+                                        GD_MSG_DICT_SET_FAILED,
+                                        "Failed to set %s for key %s in dictionary",
+                                        def_val, allvolopt);
+                                goto out;
+                        }
+
+                        ret = dict_set_int32 (ctx, "count", count);
+                        if (ret) {
+                                gf_msg (this->name, GF_LOG_ERROR, 0, GD_MSG_DICT_SET_FAILED,
+                                        "Failed to set count in dictionary");
+                        }
+
+                        def_val = NULL;
+                        allvolopt = NULL;
+
+                        goto out;
+                }
 
                 ret = dict_get_str (priv->opts, allvolopt, &def_val);
                 if (!def_val) {

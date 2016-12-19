@@ -4657,10 +4657,11 @@ glusterd_get_volume_opts (rpcsvc_request_t *req, dict_t *dict)
         }
 
         if (strcasecmp (volname, "all") == 0) {
-                ret = glusterd_get_global_options_for_all_vols (dict,
+                ret = glusterd_get_global_options_for_all_vols (req, dict,
                                                                 &rsp.op_errstr);
                 goto out;
         }
+
 
         ret = dict_get_str (dict, "key", &key);
         if (ret) {
