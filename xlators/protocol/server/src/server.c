@@ -275,6 +275,22 @@ server_priv_to_dict (xlator_t *this, dict_t *dict)
                         if (ret)
                                 goto unlock;
 
+                        memset (key, 0, sizeof (key));
+                        snprintf (key, sizeof (key), "client%d.minopversion",
+                                  count);
+                        ret = dict_set_uint32 (dict, key,
+                                               peerinfo->min_op_version);
+                        if (ret)
+                                goto unlock;
+
+                        memset (key, 0, sizeof (key));
+                        snprintf (key, sizeof (key), "client%d.maxopversion",
+                                  count);
+                        ret = dict_set_uint32 (dict, key,
+                                               peerinfo->max_op_version);
+                        if (ret)
+                                goto unlock;
+
                         count++;
                 }
         }

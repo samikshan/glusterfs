@@ -431,6 +431,9 @@ server_setvolume (rpcsvc_request_t *req)
         uint32_t             lk_version    = 0;
         char                *buf           = NULL;
         gf_boolean_t        cancelled      = _gf_false;
+        uint32_t            minopversion   = 0;
+        uint32_t            maxopversion   = 0;
+        rpc_transport_t     *xprt          = NULL;
 
         params = dict_new ();
         reply  = dict_new ();
@@ -669,6 +672,28 @@ server_setvolume (rpcsvc_request_t *req)
                         gf_msg_debug (this->name, 0, "failed to set "
                                       "peer-info");
         }
+
+
+        ret = dict_get_uint32 (params, "min-opversion", &minopversion);
+        if (ret)
+                gf_msg (this->name, GF_LOG_INFO, 0,
+                        PS_MSG_CLIENT_OPVERSION_GET_FAILED,
+                        "Failed to get client min-opversion");
+
+        ret = dict_get_uint32 (params, "max-opversion", &maxopversion);
+        if (ret)
+                gf_msg (this->name, GF_LOG_INFO, 0,
+                        PS_MSG_CLIENT_OPVERSION_GET_FAILED,
+                        "Failed to get client max-opversion");
+
+        /* Assign maximum and minimum op-version values to the client */
+        list_for_each_entry (xprt, &conf->xprt_list, list) {
+                if (strcmp (peerinfo->identifier, xprt->peerinfo.identifier))
+                        continue;
+                xprt->peerinfo.min_op_version = minopversion;
+                xprt->peerinfo.max_op_version = maxopversion;
+        }
+
         if (conf->auth_modules == NULL) {
                 gf_msg (this->name, GF_LOG_ERROR, 0, PS_MSG_AUTH_INIT_FAILED,
                         "Authentication module not initialized");
