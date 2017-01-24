@@ -93,16 +93,8 @@
 #define NLMV4_VERSION       4
 #define NLMV1_VERSION       1
 
-int MULTIPLEX = 0;
-
 static int
 send_attach_req (xlator_t *this, struct rpc_clnt *rpc, char *path, int op);
-
-void __attribute__((constructor))
-init_multiplexing (void)
-{
-        MULTIPLEX = !!getenv("MULTIPLEX");
-}
 
 extern struct volopt_map_entry glusterd_volopt_map[];
 extern glusterd_all_vol_opts valid_all_vol_opts[];
@@ -128,6 +120,22 @@ _brick_for_each (glusterd_volinfo_t *volinfo, dict_t *mod_dict,
         }
 out:
         return ret;
+}
+
+gf_boolean_t
+glusterd_is_brick_multiplexing_enabled ()
+{
+        glusterd_conf_t         *conf = NULL;
+        char                    *val = NULL;
+
+        conf = THIS->private;
+        if (dict_get_str (conf->opts, GLUSTERD_BRICK_MULTIPLEX_KEY, &val) != 0)
+        /* ret != 0 if cluster.brick-multiplex if not explicitly set using the
+         * volume set command. Return default value of 0 in that case
+         */
+                return _gf_false;
+
+        return (strcmp (val, "on") == 0) ? _gf_true : _gf_false;
 }
 
 int
@@ -1715,7 +1723,15 @@ glusterd_set_brick_socket_filepath (glusterd_volinfo_t *volinfo,
         priv = this->private;
 
         GLUSTERD_GET_VOLUME_DIR (volume_dir, volinfo, priv);
-        if (MULTIPLEX && !volinfo->is_snap_volume) {
+        if (glusterd_is_brick_multiplexing_enabled() && !volinfo->is_snap_volume) {
+                /*
+                 * In case you're wondering, that's just the first phrase that
+                 * popped into my head.  It doesn't really matter, and because
+                 * it's unique anyone who's wondering about that strangely
+                 * named file in /var/lib will quickly get here instead of
+                 * anywhere else in the code.  That might be a good thing some
+                 * day.
+                 */
                 snprintf (sockpath, len, "%s/run/brick-daemon-%s.socket",
                           volume_dir, brickinfo->hostname);
         } else {
@@ -2094,7 +2110,7 @@ glusterd_volume_stop_glusterfs (glusterd_volinfo_t  *volinfo,
                  * attaching and detaching bricks).  Therefore, we have to send
                  * an actual signal instead.
                  */
-                if (MULTIPLEX && !volinfo->is_snap_volume) {
+                if (glusterd_is_brick_multiplexing_enabled() && !volinfo->is_snap_volume) {
                         (void) send_attach_req (this, brickinfo->rpc,
                                                 brickinfo->path,
                                                 GLUSTERD_BRICK_TERMINATE);
@@ -5158,7 +5174,7 @@ find_compatible_brick (glusterd_conf_t *conf,
         glusterd_volinfo_t      *other_vol;
 
         /* Just return NULL here if multiplexing is disabled. */
-        if (!MULTIPLEX || volinfo->is_snap_volume) {
+        if (!glusterd_is_brick_multiplexing_enabled() || volinfo->is_snap_volume) {
                 return NULL;
         }
 

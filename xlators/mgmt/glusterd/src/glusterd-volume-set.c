@@ -1752,7 +1752,12 @@ struct volopt_map_entry glusterd_volopt_map[] = {
           .voltype     = "protocol/server",
           .option      = "statedump-path",
           .op_version  = 1
-        },
+        },/*
+        {
+          .key         = "server.multiplex",
+          .type        = NO_DOC,
+          .op_version  = GD_OP_VERSION_3_10_0
+        },*/
         { .key         = "server.outstanding-rpc-limit",
           .voltype     = "protocol/server",
           .option      = "rpc.outstanding-rpc-limit",
@@ -2609,6 +2614,12 @@ struct volopt_map_entry glusterd_volopt_map[] = {
         {
           .key         = "cluster.max-op-version",
           .voltype     = "mgmt/glusterd",
+          .op_version  = GD_OP_VERSION_3_10_0,
+        },
+        {
+          .key         = "cluster.brick-multiplex",
+          .voltype     = "protocol/server",
+          .value       = "off",
           .op_version  = GD_OP_VERSION_3_10_0,
         },
         /*Trash translator options */

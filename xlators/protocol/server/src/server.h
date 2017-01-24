@@ -101,6 +101,7 @@ struct server_conf {
                                             * in case if volume set options
                                             * (say *.allow | *.reject) are
                                             * tweeked */
+        gf_boolean_t            multiplex;
         gf_boolean_t            child_up; /* Set to true, when child is up, and
                                            * false, when child is down */
 

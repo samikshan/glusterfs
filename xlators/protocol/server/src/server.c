@@ -759,6 +759,7 @@ reconfigure (xlator_t *this, dict_t *options)
         rpc_transport_t          *xp_next = NULL;
         int                       inode_lru_limit;
         gf_boolean_t              trace;
+        gf_boolean_t              multiplex;
         data_t                   *data;
         int                       ret = 0;
         char                     *statedump_path = NULL;
@@ -827,6 +828,19 @@ reconfigure (xlator_t *this, dict_t *options)
                 gf_msg_trace (this->name, 0, "Reconfigured trace to %d",
                               conf->trace);
 
+        }
+
+        data = dict_get (options, "brick-multiplex");
+        if (data) {
+                ret = gf_string2boolean (data->data, &multiplex);
+                if (ret != 0) {
+                        gf_msg (this->name, GF_LOG_WARNING, EINVAL,
+                                PS_MSG_INVALID_ENTRY, "'multiplex' takes on "
+                                "only boolean values. Neglecting option");
+                        ret = -1;
+                        goto out;
+                }
+                conf->multiplex = multiplex;
         }
 
         GF_OPTION_RECONF ("statedump-path", statedump_path,
@@ -1027,6 +1041,8 @@ init (xlator_t *this)
         char              *transport_type = NULL;
         char              *statedump_path = NULL;
         int               total_transport = 0;
+        gf_boolean_t      multiplex;
+        data_t           *data = NULL;
 
         GF_VALIDATE_OR_GOTO ("init", this, out);
 
@@ -1051,6 +1067,23 @@ init (xlator_t *this)
         pthread_mutex_init (&conf->mutex, NULL);
 
         LOCK_INIT (&conf->itable_lock);
+
+        /* This isn't being used on server side right now, but if later required
+         * conf->multiplex can be used to check is brick multiplexing is enabled
+         * or not.
+         */
+        data = dict_get (this->options, "brick-multiplex");
+        if (data) {
+                ret = gf_string2boolean (data->data, &multiplex);
+                if (ret != 0) {
+                        gf_msg (this->name, GF_LOG_WARNING, EINVAL,
+                                PS_MSG_INVALID_ENTRY, "'multiplex' takes on "
+                                "only boolean values. Neglecting option");
+                        ret = -1;
+                        goto out;
+                }
+                conf->multiplex = multiplex;
+        }
 
          /* Set event threads to the configured default */
         GF_OPTION_INIT("event-threads", conf->event_threads, int32, out);
@@ -1594,6 +1627,12 @@ struct volume_options options[] = {
           .default_value = DEFAULT_VAR_RUN_DIRECTORY,
           .description = "Specifies directory in which gluster should save its"
                          " statedumps."
+        },
+        {
+          .key           = {"brick-multiplex"},
+          .type          = GF_OPTION_TYPE_BOOL,
+          .default_value = "off",
+          .description   = "Specifies if brick multiplexing is enabled."
         },
         { .key   = {"lk-heal"},
           .type  = GF_OPTION_TYPE_BOOL,

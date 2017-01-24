@@ -68,6 +68,7 @@ glusterd_all_vol_opts valid_all_vol_opts[] = {
         { GLUSTERD_SHARED_STORAGE_KEY },
         { GLUSTERD_GLOBAL_OP_VERSION_KEY },
         { GLUSTERD_MAX_OP_VERSION_KEY },
+        { GLUSTERD_BRICK_MULTIPLEX_KEY },
         { NULL },
 };
 
@@ -2328,6 +2329,7 @@ glusterd_update_volumes_dict (glusterd_volinfo_t *volinfo)
                         }
                 }
         }
+
         ret = glusterd_store_volinfo (volinfo,
                                       GLUSTERD_VOLINFO_VER_AC_INCREMENT);
 
@@ -2377,12 +2379,24 @@ glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict,
         if (key_fixed)
                 key = key_fixed;
 
-        ret = glusterd_set_shared_storage (dict, key, value, op_errstr);
-        if (ret) {
-                gf_msg (this->name, GF_LOG_ERROR, 0,
-                        GD_MSG_SHARED_STRG_SET_FAIL,
-                        "Failed to set shared storage option");
-                goto out;
+        if (strcmp (key, GLUSTERD_SHARED_STORAGE_KEY) == 0) {
+                ret = glusterd_set_shared_storage (dict, key, value, op_errstr);
+                if (ret) {
+                        gf_msg (this->name, GF_LOG_ERROR, 0,
+                                GD_MSG_SHARED_STRG_SET_FAIL,
+                                "Failed to set shared storage option");
+                        goto out;
+                }
+        }
+
+        if (strcmp (key, GLUSTERD_BRICK_MULTIPLEX_KEY) == 0) {
+                cds_list_for_each_entry (volinfo, &conf->volumes, vol_list) {
+                        ret = dict_set_dynstr_with_alloc (volinfo->dict,
+                                                  "cluster.brick-multiplex", value);
+                        if (ret)
+                                goto out;
+                }
+
         }
 
         /* If the key is cluster.op-version, set conf->op_version to the value
@@ -2449,6 +2463,17 @@ glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict,
         ret = dict_set_str (dup_opt, GLUSTERD_GLOBAL_OPT_VERSION, next_version);
         if (ret)
                 goto out;
+
+        cds_list_for_each_entry (volinfo, &conf->volumes, vol_list) {
+                ret = glusterd_create_volfiles_and_notify_services (volinfo);
+                if (ret) {
+                        gf_msg (this->name, GF_LOG_ERROR, 0,
+                                GD_MSG_VOLFILE_CREATE_FAIL,
+                                "Unable to create volfile for 'volume set'");
+                        ret = -1;
+                        goto out;
+                }
+        }
 
         ret = glusterd_store_options (this, dup_opt);
         if (ret)
@@ -2521,12 +2546,6 @@ glusterd_set_shared_storage (dict_t *dict, char *key, char *value,
         GF_VALIDATE_OR_GOTO (this->name, key, out);
         GF_VALIDATE_OR_GOTO (this->name, value, out);
         GF_VALIDATE_OR_GOTO (this->name, op_errstr, out);
-
-        ret = 0;
-
-        if (strcmp (key, GLUSTERD_SHARED_STORAGE_KEY)) {
-                goto out;
-        }
 
         /* Re-create the brick path so as to be *
          * able to re-use it                    *

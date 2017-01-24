@@ -88,6 +88,9 @@ typedef int (*glusterd_condition_func) (glusterd_volinfo_t *volinfo,
                                         void *ctx);
 typedef struct glusterd_lock_ glusterd_lock_t;
 
+gf_boolean_t
+glusterd_is_brick_multiplexing_enabled ();
+
 int32_t
 glusterd_get_lock_owner (uuid_t *cur_owner);
 

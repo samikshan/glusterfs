@@ -46,6 +46,7 @@
 #define GLUSTERD_GLOBAL_OPT_VERSION     "global-option-version"
 #define GLUSTERD_GLOBAL_OP_VERSION_KEY  "cluster.op-version"
 #define GLUSTERD_MAX_OP_VERSION_KEY     "cluster.max-op-version"
+#define GLUSTERD_BRICK_MULTIPLEX_KEY    "cluster.brick-multiplex"
 #define GLUSTERD_COMMON_PEM_PUB_FILE    "/geo-replication/common_secret.pem.pub"
 #define GEO_CONF_MAX_OPT_VALS           6
 #define GLUSTERD_CREATE_HOOK_SCRIPT     "/hooks/1/gsync-create/post/" \

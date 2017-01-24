@@ -2459,6 +2459,21 @@ glusterd_op_create_volume (dict_t *dict, char **op_errstr)
                 }
         }
 
+        if (glusterd_is_brick_multiplexing_enabled ())
+                ret = dict_set_dynstr_with_alloc (volinfo->dict,
+                                                  "cluster.brick-multiplex",
+                                                  "on");
+        else
+                ret = dict_set_dynstr_with_alloc (volinfo->dict,
+                                                 "cluster.brick-multiplex",
+                                                 "off");
+        if (ret) {
+                gf_msg (this->name, GF_LOG_ERROR, 0, GD_MSG_VOLINFO_SET_FAIL,
+                        "Failed to set cluster.multiplex for %s",
+                        volinfo->volname);
+                goto out;
+        }
+
         gd_update_volume_op_versions (volinfo);
 
         volinfo->caps = caps;
