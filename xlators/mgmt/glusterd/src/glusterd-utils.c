@@ -96,7 +96,7 @@
 int
 send_attach_req (xlator_t *this, struct rpc_clnt *rpc, char *path, int op);
 
-static gf_boolean_t
+gf_boolean_t
 is_brick_mx_enabled ()
 {
         char            *value = NULL;
@@ -5032,7 +5032,7 @@ attach_brick (xlator_t *this,
 
         brickinfo->port = other_brick->port;
         brickinfo->status = GF_BRICK_STARTED;
-        brickinfo->started_here = _gf_true;
+        /* brickinfo->started_here = _gf_true; */
         brickinfo->rpc = rpc_clnt_ref (other_brick->rpc);
 
         GLUSTERD_GET_BRICK_PIDFILE (pidfile1, other_vol, other_brick, conf);

@@ -2877,6 +2877,16 @@ glusterd_op_statedump_volume (dict_t *dict, char **op_errstr)
         } else {
                 cds_list_for_each_entry (brickinfo, &volinfo->bricks,
                                          brick_list) {
+                        /* If brick multiplexing is enabled, do not dump state
+                         * for bricks which are attached to a brick process
+                         * originally statrted by another bricks. This prevents
+                         * redundant and duplicate dump files for every every
+                         * brick even though there is only one process ruling
+                         * them all
+                         */
+                        gf_msg_debug ("glusterd", 0, "%s", brickinfo->started_here ? "true" : "false");
+                        if (is_brick_mx_enabled () && !brickinfo->started_here)
+                                continue;
                         ret = glusterd_brick_statedump (volinfo, brickinfo,
                                                         options, option_cnt,
                                                         op_errstr);

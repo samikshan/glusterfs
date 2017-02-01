@@ -80,6 +80,9 @@ typedef struct glusterd_dict_ctx_ {
         char    *prefix;
 } glusterd_dict_ctx_t;
 
+gf_boolean_t
+is_brick_mx_enabled ();
+
 int
 glusterd_compare_lines (const void *a, const void *b);
 
