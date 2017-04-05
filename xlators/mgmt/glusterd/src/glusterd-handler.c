@@ -5008,6 +5008,8 @@ glusterd_handle_get_vol_opt (rpcsvc_request_t *req)
         return glusterd_big_locked_handler (req, __glusterd_handle_get_vol_opt);
 }
 
+extern struct rpc_clnt_program gd_brick_prog;
+
 static int
 glusterd_print_global_options (dict_t *opts, char *key, data_t *val, void *data)
 {
@@ -5104,7 +5106,11 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
         glusterd_peer_hostname_t    *peer_hostname_info = NULL;
         glusterd_volinfo_t          *volinfo = NULL;
         glusterd_brickinfo_t        *brickinfo = NULL;
+        glusterd_pending_node_t     *pending_node = NULL;
         xlator_t                    *this = NULL;
+        rpc_clnt_t                  *rpc = NULL;
+        struct syncargs              args = {0,};
+        gd1_mgmt_brick_op_req       *brick_req = NULL;
         char                        *odir = NULL;
         char                        *filename = NULL;
         char                        *ofilepath = NULL;
@@ -5113,6 +5119,14 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
         int                          odirlen = 0;
         time_t                       now = 0;
         char                         timestamp[16] = {0,};
+        int                          brick_index = -1;
+
+        int             client_count = 0;
+        char            key[1024] = {0,};
+        char            *clientname = NULL;
+        uint64_t        bytesread = 0;
+        uint64_t        byteswrite = 0;
+        uint32_t        opversion = 0;
 
         char    *vol_type_str = NULL;
         char    *hot_tier_type_str = NULL;
@@ -5325,6 +5339,127 @@ glusterd_get_state (rpcsvc_request_t *req, dict_t *dict)
                                       count <= volinfo->tier_info.hot_brick_count ?
                                       "Hot" : "Cold");
                         }
+
+                        brick_index++;
+                        if (gf_uuid_compare (brickinfo->uuid, MY_UUID) ||
+                            !glusterd_is_brick_started (brickinfo)) {
+                                continue;
+                        }
+                        pending_node = GF_CALLOC (1, sizeof (*pending_node),
+                                                  gf_gld_mt_pending_node_t);
+                        if (!pending_node) {
+                                ret = -1;
+                                gf_msg (THIS->name, GF_LOG_ERROR, ENOMEM,
+                                        GD_MSG_NO_MEMORY,
+                                        "Unable to allocate memory");
+                                goto out;
+                        }
+                        pending_node->node = brickinfo;
+                        pending_node->type = GD_NODE_BRICK;
+                        pending_node->index = brick_index;
+
+                        rpc = glusterd_pending_node_get_rpc (pending_node);
+                        if (!rpc) {
+                                ret = -1;
+                                gf_msg (this->name, GF_LOG_ERROR, 0,
+                                        GD_MSG_RPC_FAILURE, "Brick Op failed "
+                                        "due to rpc failure.");
+                                goto out;
+                        }
+                        brick_req = GF_CALLOC (1, sizeof (*brick_req),
+                                               gf_gld_mt_mop_brick_req_t);
+                        if (!brick_req)
+                                goto out;
+                        brick_req->op = GLUSTERD_BRICK_STATUS;
+                        brick_req->name = "";
+
+                        ret = dict_set_int32 (dict, "cmd", GF_CLI_STATUS_CLIENTS);
+                        if (ret)
+                                goto out;
+
+                        ret = dict_set_str (dict, "volname", volinfo->volname);
+                        if (ret)
+                                goto out;
+
+                        ret = dict_allocate_and_serialize (dict,
+                                                &brick_req->input.input_val,
+                                                &brick_req->input.input_len);
+                        if (ret)
+                                goto out;
+
+                        GD_SYNCOP (rpc, (&args), NULL, gd_syncop_brick_op_cbk,
+                                   brick_req, &gd_brick_prog, brick_req->op,
+                                   xdr_gd1_mgmt_brick_op_req);
+
+                        pending_node = NULL;
+                        brick_req = NULL;
+
+                        if (args.op_ret)
+                                goto out;
+
+                        ret = dict_get_int32 (args.dict, "clientcount",
+                                              &client_count);
+                        if (ret) {
+                                gf_msg (this->name, GF_LOG_ERROR, 0,
+                                        GD_MSG_DICT_GET_FAILED,
+                                        "Couldn't get client clount");
+                                goto out;
+                        }
+
+                        fprintf (fp, "Volume%d.Brick%d.client_count: %d\n",
+                                 count_bkp, count, client_count);
+
+                        if (client_count == 0)
+                                continue;
+
+                        int i;
+
+                        for (i = 1; i <= client_count; i++) {
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                          "client%d.hostname", i-1);
+                                ret = dict_get_str (args.dict, key, &clientname);
+
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                          "Client%d.hostname", i);
+                                fprintf (fp, "Volume%d.Brick%d.%s: %s\n",
+                                         count_bkp, count, key, clientname);
+
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                          "client%d.bytesread", i-1);
+                                ret = dict_get_uint64 (args.dict, key, &bytesread);
+
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                          "Client%d.bytesread", i);
+                                fprintf (fp, "Volume%d.Brick%d.%s: %"PRIu64"\n",
+                                         count_bkp, count, key, bytesread);
+
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                         "client%d.byteswrite", i-1);
+                                ret = dict_get_uint64 (args.dict, key, &byteswrite);
+
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                          "Client%d.byteswrite", i);
+                                fprintf (fp, "Volume%d.Brick%d.%s: %"PRIu64"\n",
+                                         count_bkp, count, key, byteswrite);
+
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                         "client%d.opversion", i-1);
+                                ret = dict_get_uint32 (args.dict, key, &opversion);
+
+                                memset (key, 0, sizeof (key));
+                                snprintf (key, sizeof (key),
+                                          "Client%d.opversion", i);
+
+                                fprintf (fp, "Volume%d.Brick%d.%s: %"PRIu32"\n",
+                                         count_bkp, count, key, opversion);
+                        }
                 }
 
                 count = count_bkp;
@@ -5476,6 +5611,12 @@ out:
 
         if (fp)
                 fclose(fp);
+
+        if (pending_node)
+                GF_FREE (pending_node);
+
+        if (brick_req)
+                GF_FREE (brick_req);
 
         rsp.op_ret = ret;
         rsp.op_errstr = err_str;
