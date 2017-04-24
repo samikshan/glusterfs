@@ -47,6 +47,7 @@ glusterd_reset_brick_prevalidate (dict_t *dict, char **op_errstr,
         char                                     pidfile[PATH_MAX]  = {0};
         xlator_t                                *this               = NULL;
         gf_boolean_t                             is_force           = _gf_false;
+        gf_boolean_t                             is_script_mode     = _gf_false;
         pid_t                                    pid                = -1;
         uuid_t                                   volume_id          = {0,};
         char                                    *dup_dstbrick       = NULL;
@@ -153,11 +154,14 @@ glusterd_reset_brick_prevalidate (dict_t *dict, char **op_errstr,
         volinfo->rep_brick.src_brick = src_brickinfo;
         volinfo->rep_brick.dst_brick = dst_brickinfo;
 
+        ret = dict_get_int32 (dict, "scriptmode", &is_script_mode);
+        ret = 0;
         if (gf_is_local_addr (host)) {
                 ret = glusterd_validate_and_create_brickpath
                                                   (dst_brickinfo,
                                                   volinfo->volume_id,
-                                                  op_errstr, is_force);
+                                                  op_errstr, is_force,
+                                                  is_script_mode);
                 if (ret)
                         goto out;
         } else {
@@ -234,17 +238,17 @@ out:
 int
 glusterd_op_reset_brick (dict_t *dict, dict_t *rsp_dict)
 {
-        int                                      ret           = 0;
-        char                                    *op            = NULL;
-        glusterd_volinfo_t                      *volinfo       = NULL;
-        char                                    *volname       = NULL;
-        xlator_t                                *this          = NULL;
-        glusterd_conf_t                         *priv          = NULL;
-        char                                    *src_brick     = NULL;
-        char                                    *dst_brick     = NULL;
-        glusterd_brickinfo_t                    *src_brickinfo = NULL;
-        glusterd_brickinfo_t                    *dst_brickinfo = NULL;
-        char                                    pidfile[PATH_MAX] = {0,};
+        int                              ret           = 0;
+        char                            *op            = NULL;
+        glusterd_volinfo_t              *volinfo       = NULL;
+        char                            *volname       = NULL;
+        xlator_t                        *this          = NULL;
+        glusterd_conf_t                 *priv          = NULL;
+        char                            *src_brick     = NULL;
+        char                            *dst_brick     = NULL;
+        glusterd_brickinfo_t            *src_brickinfo = NULL;
+        glusterd_brickinfo_t            *dst_brickinfo = NULL;
+        char                             pidfile_path[PATH_MAX] = {0,};
 
         this = THIS;
         GF_ASSERT (this);
@@ -289,25 +293,20 @@ glusterd_op_reset_brick (dict_t *dict, dict_t *rsp_dict)
         }
 
         if (!strcmp (op, "GF_RESET_OP_START")) {
-                (void) glusterd_brick_disconnect (src_brickinfo);
-                GLUSTERD_GET_BRICK_PIDFILE (pidfile, volinfo,
-                                            src_brickinfo, priv);
-                ret = glusterd_service_stop ("brick", pidfile,
-                                             SIGTERM, _gf_false);
-                if (ret == 0) {
-                        glusterd_set_brick_status (src_brickinfo,
-                                                GF_BRICK_STOPPED);
-                        (void) glusterd_brick_unlink_socket_file
-                                        (volinfo, src_brickinfo);
-                        gf_msg (this->name, GF_LOG_INFO, 0,
-                        GD_MSG_BRICK_CLEANUP_SUCCESS,
-                        "Brick cleanup successful.");
+                if (is_brick_mx_enabled ()) {
+                        (void) send_attach_req (this, src_brickinfo->rpc,
+                                                src_brickinfo->path,
+                                                GLUSTERD_BRICK_TERMINATE);
+                        GLUSTERD_GET_BRICK_PIDFILE (pidfile_path, volinfo,
+                                                    src_brickinfo, priv);
+                        (void) sys_unlink (pidfile_path);
                 } else {
-                        gf_msg (this->name, GF_LOG_CRITICAL, 0,
-                                GD_MSG_BRK_CLEANUP_FAIL,
-                                "Unable to cleanup src brick");
-                        goto out;
+                        (void) glusterd_brick_terminate (volinfo, src_brickinfo,
+                                                         NULL, 0, NULL);
                 }
+                (void) glusterd_brick_disconnect (src_brickinfo);
+
+                ret = 0;
                 goto out;
         } else if (!strcmp (op, "GF_RESET_OP_COMMIT") ||
                    !strcmp (op, "GF_RESET_OP_COMMIT_FORCE")) {
@@ -344,27 +343,21 @@ glusterd_op_reset_brick (dict_t *dict, dict_t *rsp_dict)
                 if (ret)
                         goto out;
 
-                if (gf_is_local_addr (dst_brickinfo->hostname)) {
+                if (gf_uuid_compare (dst_brickinfo->uuid, MY_UUID)) {
                         gf_msg_debug (this->name, 0, "I AM THE DESTINATION HOST");
-                        (void) glusterd_brick_disconnect (src_brickinfo);
-                        GLUSTERD_GET_BRICK_PIDFILE (pidfile, volinfo,
-                                                    src_brickinfo, priv);
-                        ret = glusterd_service_stop ("brick", pidfile,
-                                                     SIGTERM, _gf_false);
-                        if (ret == 0) {
-                                glusterd_set_brick_status
-                                        (src_brickinfo, GF_BRICK_STOPPED);
-                                (void) glusterd_brick_unlink_socket_file
-                                                (volinfo, src_brickinfo);
-                                gf_msg (this->name, GF_LOG_INFO, 0,
-                                GD_MSG_BRICK_CLEANUP_SUCCESS,
-                                "Brick cleanup successful.");
+                        if (is_brick_mx_enabled ()) {
+                                (void) send_attach_req (this, src_brickinfo->rpc,
+                                                        src_brickinfo->path,
+                                                        GLUSTERD_BRICK_TERMINATE);
+                                GLUSTERD_GET_BRICK_PIDFILE (pidfile_path, volinfo,
+                                                            src_brickinfo, priv);
+                                (void) sys_unlink (pidfile_path);
                         } else {
-                                gf_msg (this->name, GF_LOG_CRITICAL, 0,
-                                        GD_MSG_BRK_CLEANUP_FAIL,
-                                        "Unable to cleanup src brick");
-                                goto out;
+                                (void) glusterd_brick_terminate (volinfo, src_brickinfo,
+                                                           NULL, 0, NULL);
                         }
+                        (void) glusterd_brick_disconnect (src_brickinfo);
+                        ret = 0;
                 }
 
                 ret = glusterd_svcs_stop (volinfo);

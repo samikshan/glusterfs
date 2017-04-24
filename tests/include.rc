@@ -90,7 +90,8 @@ LOGDIR=$(gluster --print-logdir)
 statedumpdir=`gluster --print-statedumpdir`; # Default directory for statedump
 
 CLI="gluster --mode=script --wignore";
-CLI_NO_FORCE="gluster --mode-script";
+CLI_NO_FORCE="gluster --mode=script";
+
 _GFS () {
 	glusterfs "$@"
 	local mount_ret=$?

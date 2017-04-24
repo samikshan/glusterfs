@@ -96,8 +96,8 @@
 int
 send_attach_req (xlator_t *this, struct rpc_clnt *rpc, char *path, int op);
 
-static gf_boolean_t
-is_brick_mx_enabled ()
+gf_boolean_t
+is_brick_mx_enabled (void)
 {
         char            *value = NULL;
         int             ret = 0;
@@ -1332,7 +1332,8 @@ out:
 int
 glusterd_validate_and_create_brickpath (glusterd_brickinfo_t *brickinfo,
                                         uuid_t volume_id, char **op_errstr,
-                                        gf_boolean_t is_force)
+                                        gf_boolean_t is_force,
+                                        gf_boolean_t is_script_mode)
 {
         int          ret                 = -1;
         char         parentdir[PATH_MAX] = {0,};
@@ -1406,8 +1407,10 @@ glusterd_validate_and_create_brickpath (glusterd_brickinfo_t *brickinfo,
                                   " Or use 'force' at the end of the command if"
                                   " you want to override this behavior.",
                                   brickinfo->hostname, brickinfo->path);
-                        ret = -1;
-                        goto out;
+                        if (!is_script_mode) {
+                                ret = -1;
+                                goto out;
+                        }
                 }
         }
 
@@ -2079,55 +2082,6 @@ glusterd_brick_disconnect (glusterd_brickinfo_t *brickinfo)
         }
 
         return 0;
-}
-
-int32_t
-glusterd_volume_stop_glusterfs (glusterd_volinfo_t  *volinfo,
-                                glusterd_brickinfo_t   *brickinfo,
-                                gf_boolean_t del_brick)
-{
-        xlator_t        *this                   = NULL;
-        int             ret                     = 0;
-        char            *op_errstr              = NULL;
-
-        GF_ASSERT (volinfo);
-        GF_ASSERT (brickinfo);
-
-        this = THIS;
-        GF_ASSERT (this);
-
-        if (del_brick)
-                cds_list_del_init (&brickinfo->brick_list);
-
-        if (GLUSTERD_STATUS_STARTED == volinfo->status) {
-                /*
-                 * In a post-multiplexing world, even if we're not actually
-                 * doing any multiplexing, just dropping the RPC connection
-                 * isn't enough.  There might be many such connections during
-                 * the brick daemon's lifetime, even if we only consider the
-                 * management RPC port (because tests etc. might be manually
-                 * attaching and detaching bricks).  Therefore, we have to send
-                 * an actual signal instead.
-                 */
-                if (is_brick_mx_enabled ()) {
-                        (void) send_attach_req (this, brickinfo->rpc,
-                                                brickinfo->path,
-                                                GLUSTERD_BRICK_TERMINATE);
-                } else {
-                        (void) glusterd_brick_terminate (volinfo, brickinfo,
-                                                         NULL, 0, &op_errstr);
-                        if (op_errstr) {
-                                GF_FREE (op_errstr);
-                        }
-                }
-                (void) glusterd_brick_disconnect (brickinfo);
-                ret = 0;
-        }
-
-        if (del_brick)
-                glusterd_delete_brick (volinfo, brickinfo);
-
-        return ret;
 }
 
 /* Free LINE[0..N-1] and then the LINE buffer.  */
@@ -6478,18 +6432,36 @@ glusterd_brick_stop (glusterd_volinfo_t *volinfo,
                 goto out;
         }
 
-        gf_msg_debug (this->name, 0, "About to stop glusterfs"
-                " for brick %s:%s", brickinfo->hostname,
-                brickinfo->path);
-        ret = glusterd_volume_stop_glusterfs (volinfo, brickinfo, del_brick);
-        if (ret) {
-                gf_msg (this->name, GF_LOG_CRITICAL, 0,
-                        GD_MSG_BRICK_STOP_FAIL, "Unable to stop"
-                        " brick: %s:%s", brickinfo->hostname,
-                        brickinfo->path);
-                goto out;
+        if (del_brick)
+                cds_list_del_init (&brickinfo->brick_list);
+
+        if (GLUSTERD_STATUS_STARTED == volinfo->status) {
+                /*
+                 * In a post-multiplexing world, even if we're not actually
+                 * doing any multiplexing, just dropping the RPC connection
+                 * isn't enough.  There might be many such connections during
+                 * the brick daemon's lifetime, even if we only consider the
+                 * management RPC port (because tests etc. might be manually
+                 * attaching and detaching bricks).  Therefore, we have to send
+                 * an actual signal instead.
+                 */
+                if (is_brick_mx_enabled ()) {
+                        (void) send_attach_req (this, brickinfo->rpc,
+                                                brickinfo->path,
+                                                GLUSTERD_BRICK_TERMINATE);
+                } else {
+                        gf_msg_debug (this->name, 0, "About to stop glusterfsd"
+                                      " for brick %s:%s", brickinfo->hostname,
+                                      brickinfo->path);
+                        (void) glusterd_brick_terminate (volinfo, brickinfo,
+                                                         NULL, 0, NULL);
+                }
+                (void) glusterd_brick_disconnect (brickinfo);
+                ret = 0;
         }
 
+        if (del_brick)
+                glusterd_delete_brick (volinfo, brickinfo);
 out:
         gf_msg_debug (this->name, 0, "returning %d ", ret);
         return ret;
