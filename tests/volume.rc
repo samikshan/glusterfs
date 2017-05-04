@@ -23,7 +23,13 @@ function brick_count()
 
 function online_brick_count ()
 {
-    find $GLUSTERD_WORKDIR/vols/ -name '*.pid' | wc -l
+    tot=`gluster --xml volume status | grep '<status>1' | wc -l`
+    sheal=`gluster --xml volume status  | grep -A 5 "Self-heal Daemon" | grep '<status>1' | wc -l`
+    qdam=`gluster --xml volume status  | grep -A 5 "Quota Daemon" | grep '<status>1' | wc -l`
+    sndam=`gluster --xml volume status  | grep -A 5 "Snapshot Daemon" | grep '<status>1' | wc -l`
+    tierdam=`gluster --xml volume status  | grep -A 5 "Tier Daemon" | grep '<status>1' | wc -l`
+    final=`expr $tot - $sheal - $qdam - $sndam - $tierdam`
+    echo $final
 }
 
 function brick_up_status {

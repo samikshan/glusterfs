@@ -2018,12 +2018,9 @@ glusterfs_pidfile_cleanup (glusterfs_ctx_t *ctx)
                       cmd_args->pid_file);
 
         if (ctx->cmd_args.pid_file) {
-                sys_unlink (ctx->cmd_args.pid_file);
                 ctx->cmd_args.pid_file = NULL;
         }
 
-        lockf (fileno (ctx->pidfp), F_ULOCK, 0);
-        fclose (ctx->pidfp);
         ctx->pidfp = NULL;
 
         return 0;
@@ -2041,13 +2038,6 @@ glusterfs_pidfile_update (glusterfs_ctx_t *ctx)
         pidfp = ctx->pidfp;
         if (!pidfp)
                 return 0;
-
-        ret = lockf (fileno (pidfp), F_TLOCK, 0);
-        if (ret) {
-                gf_msg ("glusterfsd", GF_LOG_ERROR, errno, glusterfsd_msg_18,
-                        cmd_args->pid_file);
-                return ret;
-        }
 
         ret = sys_ftruncate (fileno (pidfp), 0);
         if (ret) {

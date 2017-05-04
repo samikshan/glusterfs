@@ -3633,41 +3633,60 @@ gf_skip_header_section (int fd, int header_len)
         return ret;
 }
 
+/* Below function is use to check at runtime if pid is running */
+
+gf_boolean_t
+gf_is_pid_running (int pid)
+{
+        char fname[32] = {0,};
+
+        snprintf(fname, sizeof(fname), "/proc/%d/cmdline", pid);
+
+        if (sys_access (fname , R_OK) != 0) {
+                return _gf_false;
+        }
+
+        return _gf_true;
+
+}
+
+
 gf_boolean_t
 gf_is_service_running (char *pidfile, int *pid)
 {
         FILE            *file = NULL;
         gf_boolean_t    running = _gf_false;
         int             ret = 0;
-        int             fno = 0;
+        int             lpid = -1;
 
         file = fopen (pidfile, "r+");
         if (!file) {
                 goto out;
         }
 
-        fno = fileno (file);
-        ret = lockf (fno, F_TEST, 0);
-        if (ret == -1)
-                running = _gf_true;
-        if (!pid) {
-                goto out;
-        }
-
-        ret = fscanf (file, "%d", pid);
+        ret = fscanf (file, "%d", &lpid);
         if (ret <= 0) {
                 gf_msg ("", GF_LOG_ERROR, errno, LG_MSG_FILE_OP_FAILED,
                         "Unable to read pidfile: %s", pidfile);
-                *pid = -1;
+                if (pid)
+                        *pid = -1;
         }
 
-        if (!*pid) {
+        if (!lpid) {
                 /*
                  * PID 0 means we've started the process, but it hasn't gotten
                  * far enough to put in a real PID yet.  More details are in
                  * glusterd_brick_start.
                  */
                 running = _gf_true;
+                goto out;
+        }
+        if (gf_is_pid_running (lpid)) {
+                if (pid)
+                        *pid = lpid;
+                running = _gf_true;
+        } else {
+                running = _gf_false;
         }
 
 out:
