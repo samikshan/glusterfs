@@ -4378,8 +4378,11 @@ glusterd_import_global_opts (dict_t *friend_data)
                  * recompute if quorum is met. If quorum is not met bricks are
                  * not started and those already running are stopped
                  */
-                if (old_quorum != new_quorum)
+                if (old_quorum != new_quorum){
+                        gf_msg (this->name, GF_LOG_ERROR, 0,
+                                GD_MSG_GLOBAL_OPT_IMPORT_FAIL, "New quorum: %f", new_quorum);
                         glusterd_restart_bricks (conf);
+                }
         }
 
         ret = 0;
