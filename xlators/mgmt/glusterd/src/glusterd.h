@@ -241,6 +241,7 @@ struct glusterd_brick_proc {
         uint32_t                brick_count;
         struct cds_list_head    brick_proc_list;
         struct cds_list_head    bricks;
+        struct rpc_clnt         *rpc;
 };
 
 typedef struct glusterd_brick_proc glusterd_brick_proc_t;

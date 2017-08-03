@@ -1825,6 +1825,44 @@ glusterd_set_brick_socket_filepath (glusterd_volinfo_t *volinfo,
  * reconnections are taken care by rpc-layer
  */
 int32_t
+glusterd_brickprocess_connect (glusterd_brick_proc_t *brick_proc,
+                               char *socketpath)
+{
+        int                     ret = -1;
+        dict_t                  *options = NULL;
+        struct rpc_clnt         *rpc = NULL;
+
+        GF_VALIDATE_OR_GOTO ("glusterd", socketpath, out);
+
+        if (brick_proc->rpc == NULL) {
+                /* Setting frame-timeout to 10mins (600seconds).
+                 * Unix domain sockets ensures that the connection is reliable.
+                 * The default timeout of 30mins used for unreliable network
+                 * connections is too long for unix domain socket connections.
+                 */
+                ret = rpc_transport_unix_options_build (&options, socketpath,
+                                                        600);
+                if (ret)
+                        goto out;
+
+                ret = glusterd_rpc_create (&rpc, options,
+                                           glusterd_brickproc_rpc_notify,
+                                           brick_proc->port, _gf_false);
+                if (ret)
+                        goto out;
+                brick_proc->rpc = rpc;
+        }
+
+        ret = 0;
+out:
+        gf_msg_debug ("glusterd", 0, "Returning %d", ret);
+        return ret;
+}
+
+/* connection happens only if it is not aleady connected,
+ * reconnections are taken care by rpc-layer
+ */
+int32_t
 glusterd_brick_connect (glusterd_volinfo_t  *volinfo,
                         glusterd_brickinfo_t  *brickinfo, char *socketpath)
 {
@@ -2100,6 +2138,7 @@ retry:
                 goto out;
         }
 
+connect:
         ret = glusterd_brick_process_add_brick (brickinfo, volinfo);
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, 0,
@@ -2109,15 +2148,6 @@ retry:
                 goto out;
         }
 
-connect:
-        ret = glusterd_brick_connect (volinfo, brickinfo, socketpath);
-        if (ret) {
-                gf_msg (this->name, GF_LOG_ERROR, 0,
-                        GD_MSG_BRICK_DISCONNECTED,
-                        "Failed to connect to brick %s:%s on %s",
-                        brickinfo->hostname, brickinfo->path, socketpath);
-                goto out;
-        }
 
 out:
         if (ret)
@@ -2267,6 +2297,10 @@ glusterd_brick_process_remove_brick (glusterd_brickinfo_t *brickinfo)
                                 GF_FREE (brickinfoiter->logfile);
                                 GF_FREE (brickinfoiter);
                                 brick_proc->brick_count--;
+                                if (brick_proc->rpc) {
+                                         glusterd_rpc_clnt_unref (priv, brick_proc->rpc);
+                                         brickinfo->rpc = NULL;
+                                }
                                 break;
                         }
                 }
@@ -2286,8 +2320,7 @@ out:
 }
 
 int
-glusterd_brick_process_add_brick (glusterd_brickinfo_t *brickinfo,
-                                  glusterd_volinfo_t *volinfo)
+glusterd_brick_process_add_brick (glusterd_brickinfo_t *brickinfo)
 {
         int                      ret = -1;
         xlator_t                *this = NULL;
@@ -2319,6 +2352,8 @@ glusterd_brick_process_add_brick (glusterd_brickinfo_t *brickinfo,
 
         ret = glusterd_brick_proc_for_port (brickinfo->port, &brick_proc);
         if (ret) {
+                /* No brick process instance still created for respective port.
+                 * Create new brick process instance here */
                 ret = glusterd_brickprocess_new (&brick_proc);
                 if (ret) {
                         gf_msg (this->name, GF_LOG_ERROR, 0,
@@ -2328,12 +2363,23 @@ glusterd_brick_process_add_brick (glusterd_brickinfo_t *brickinfo,
                 }
 
                 brick_proc->port = brickinfo->port;
+                ret = glusterd_brickprocess_connect (brick_proc, socketpath);
+                if (ret) {
+                        gf_msg (this->name, GF_LOG_ERROR, 0,
+                                        GD_MSG_BRICK_DISCONNECTED,
+                                        "Failed to connect to brick %s:%s on %s",
+                                        brickinfo->hostname, brickinfo->path, socketpath);
+                        goto out;
+                }
+
+                brickinfo->rpc = rpc_clnt_ref (brick_proc->rpc);
 
                 cds_list_add_tail (&brick_proc->brick_proc_list, &priv->brick_procs);
         }
 
         cds_list_add_tail (&brickinfo_dup->brick_list, &brick_proc->bricks);
         brick_proc->brick_count++;
+        brickinfo->rpc = rpc_clnt_ref (brick_proc->rpc);
 out:
         return ret;
 }
@@ -5382,8 +5428,6 @@ attach_brick (xlator_t *this,
                                 glusterd_copy_file (pidfile1, pidfile2);
                                 brickinfo->port = other_brick->port;
                                 brickinfo->status = GF_BRICK_STARTED;
-                                brickinfo->rpc =
-                                        rpc_clnt_ref (other_brick->rpc);
                                 ret = glusterd_brick_process_add_brick (brickinfo,
                                                                         volinfo);
                                 if (ret) {
